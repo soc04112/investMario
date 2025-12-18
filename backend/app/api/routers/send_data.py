@@ -45,7 +45,7 @@ async def datalist(request: Request, body:WalletRequest, db: Session = Depends(g
 
     history_list = db.query(TradingHistory) \
         .filter(TradingHistory.userid == id) \
-        .order_by(TradingHistory.time.asc()) \
+        .order_by(TradingHistory.time.desc()) \
         .all()
     
     account = db.query(UserInformation) \
