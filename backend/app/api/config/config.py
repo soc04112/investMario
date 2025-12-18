@@ -54,7 +54,7 @@ class TradingHistory(Base):
     
     trade = Column(JSONB, comment="거래 정보")
 
-
+    trade_fee = Column(Numeric, comment="총 거래 수수료")
 
 # 유저 정보
 class UserInformation(Base):

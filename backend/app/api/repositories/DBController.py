@@ -15,7 +15,7 @@ class DBController():
 
         self.data = data
 
-    def user_sign(self):
+    def user_sign_userinformation(self):
         db = SessionLocal()
         try:
             new_user = UserInformation(
@@ -62,11 +62,11 @@ class DBController():
                         "access" : "",
                         "secret" : ""                     
                     },
-                    "bingx" :{
+                    "bingx" : {
                         "access" : "",
-                        "secret" : ""        
-                    },
-                    "open" : {
+                        "secret" : ""                     
+                    },                    
+                    "gpt" : {
                         "secret" : ""
                     },
                     "gemini" : {
@@ -92,22 +92,23 @@ class DBController():
         finally:
             db.close()
 
+    def insert_default_trade(self):
+        db = SessionLocal()
         try:
-            new_user = TradingHistory(
+            trade = TradingHistory(
                 userid = self.userid,
-                tradenumber = 0,
+                trade_number = 0,
                 time = datetime.utcnow().isoformat(),
+                position = {},
                 why = {},
-                position ={},
-                average ={},
-                available =0,
-                owner_coin ={},
-                total_asset = 0,
+                owner_coin = {},
+                average = {},
                 trade = {},
-                trade_fee = 0, 
+                total_asset = 0,
+                available = 0
             )
 
-            db.add(new_user)
+            db.add(trade)
             db.commit()
         except IntegrityError:
             db.rollback()
@@ -118,68 +119,60 @@ class DBController():
         finally:
             db.close()
 
+
     def user_information_update(self):
         db = SessionLocal()
-        update_data = self.data
+        update_data = self.data  # {'user_prompt': '새 프롬프트'} 처럼 일부만 올 수도 있음
 
         try:
             user = db.query(UserInformation).filter_by(userid=self.userid).first()
-            if user:
-                # 키 암호화
-                upbit_access_token = cipher.encrypt(update_data['upbit_access_key'].encode()).decode()
-                upbit_secret_token = cipher.encrypt(update_data['upbit_secret_key'].encode()).decode()
-                bithumb_access_token = cipher.encrypt(update_data['bithumb_access_key'].encode()).decode()
-                bithumb_secret_token = cipher.encrypt(update_data['bithumb_secret_key'].encode()).decode()
-                geminiapi = cipher.encrypt(update_data['gemini_key_value'].encode()).decode()
-                grokapi = cipher.encrypt(update_data.get('grok_key_value', '').encode()).decode()
-                gptapi = cipher.encrypt(update_data.get('gpt_key_value', '').encode()).decode()
-                bingx_access_token = cipher.encrypt(update_data['bingx_access_key'].encode()).decode()
-                bingx_secret_token = cipher.encrypt(update_data['bingx_secret_key'].encode()).decode()
-                # OpenAI / Claude는 필요시 추가
-                openapi = ""  
-                claudeapi = ""
+            if not user:
+                return {"status": "fail", "error": "User not found"}
 
-                # userinfo 업데이트
-                user.userinfo = {
-                    "username": self.username,
-                    "usemodel": update_data['usemodel'],
-                    "colors": update_data['colors'],
-                    "logo": update_data['logo'],
-                    "phone": update_data['phone'],
-                    "email": update_data['email'],
-                    "post": update_data['post'],
-                    "country": update_data.get('country', ''),
-                    "createdtime": datetime.utcnow().isoformat()
-                }
+            # --- 기존 데이터 가져오기 ---
+            existing_userinfo = user.userinfo or {}
+            existing_usercustom = user.usercustom or {}
+            existing_money = user.money or {}
+            existing_key = user.key or {}
 
-                # usercustom 업데이트
-                user.usercustom = {
-                    "prompt_style": "",
-                    "interval": update_data['interval'],
-                    "play": update_data['play'],
-                    "user_prompt": update_data.get('user_prompt', ""),
-                    "ticker": update_data['Ticker'],
-                    "trading_fee": update_data['trading_fee'],
-                    "exchange": update_data['exchange']
-                }
+            # --- 키 암호화 함수 ---
+            def encrypt_key(new_value, existing_value):
+                return cipher.encrypt(new_value.encode()).decode() if new_value else existing_value or ""
 
-                # money 업데이트 (기존 유지)
-                user.money = {
-                    "tier": update_data.get('tier', 'Demo'),
-                    "tier_time": update_data.get('tier_time', "")
-                }
+            # --- 키 업데이트 (값이 있을 때만 덮어쓰기) ---
+            user.key = {
+                "upbit": {
+                    "access": encrypt_key(update_data.get('upbit_access_key'), existing_key.get('upbit', {}).get('access')),
+                    "secret": encrypt_key(update_data.get('upbit_secret_key'), existing_key.get('upbit', {}).get('secret'))
+                },
+                "bithumb": {
+                    "access": encrypt_key(update_data.get('bithumb_access_key'), existing_key.get('bithumb', {}).get('access')),
+                    "secret": encrypt_key(update_data.get('bithumb_secret_key'), existing_key.get('bithumb', {}).get('secret'))
+                },
+                "bingx" : {
+                    "access": encrypt_key(update_data.get('bingx_access_key'), existing_key.get('bingx', {}).get('access')),
+                    "secret": encrypt_key(update_data.get('bingx_secret_key'), existing_key.get('bingx', {}).get('secret'))
+                },
+                "gemini": {"secret": encrypt_key(update_data.get('gemini_key_value'), existing_key.get('gemini', {}).get('secret'))},
+                "grok": {"secret": encrypt_key(update_data.get('grok_key_value'), existing_key.get('grok', {}).get('secret'))},
+                "claude": {"secret": existing_key.get('claude', {}).get('secret', '')},
+                "gpt": {"secret": encrypt_key(update_data.get('gpt_key_value'), existing_key.get('gpt', {}).get('secret'))}
+            }
 
-                # key 업데이트
-                user.key = {
-                    "upbit": {"access": upbit_access_token, "secret": upbit_secret_token},
-                    "bithumb": {"access": bithumb_access_token, "secret": bithumb_secret_token},
-                    "bingx" : {"access": bingx_access_token, "secret": bingx_secret_token},
-                    "open": {"secret": openapi},
-                    "gemini": {"secret": geminiapi},
-                    "grok": {"secret": grokapi},
-                    "claude": {"secret": claudeapi},
-                    "gpt": {"secret": gptapi}
-                }
+            # --- userinfo 업데이트 ---
+            info_keys = ['usemodel', 'colors', 'logo', 'phone', 'email', 'post', 'country']
+            user.userinfo = {**existing_userinfo, **{k: update_data[k] for k in info_keys if k in update_data}}
+            # username과 생성시간은 항상 갱신
+            user.userinfo["username"] = self.username
+            user.userinfo["createdtime"] = datetime.utcnow().isoformat()
+
+            # --- usercustom 업데이트 ---
+            custom_keys = ['interval', 'play', 'user_prompt', 'ticker', 'trading_fee', 'exchange']
+            user.usercustom = {**existing_usercustom, **{k: update_data[k] for k in custom_keys if k in update_data}}
+
+            # --- money 업데이트 ---
+            money_keys = ['tier', 'tier_time']
+            user.money = {**existing_money, **{k: update_data[k] for k in money_keys if k in update_data}}
 
             db.commit()
             return {"status": "success"}
@@ -196,7 +189,7 @@ class DBController():
 
         finally:
             db.close()
-
+            
     def user_delete(self):
         db = SessionLocal()
         try:

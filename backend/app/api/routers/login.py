@@ -45,6 +45,6 @@ async def google_login(token_data: Token, response: Response, db: Session = Depe
         return {"message": "exists", "userid": payload['name']}
     else:
         inital_setting = DBController(payload=payload)
-        inital_setting.user_sign()
+        inital_setting.user_sign_userinformation()
         inital_setting.insert_default_trade()        
         return {"message": "new", "userid": payload['name']}
