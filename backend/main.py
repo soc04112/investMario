@@ -3,6 +3,7 @@ from app.common.imports import *
 from app.api.routers import login, send_data, userinfor, userinfo_modify, verfyjwt, logout
 from app.database.connection import get_connection
 from app.api.config.config import Base, engine
+from app.api.routers import agent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,3 +42,4 @@ app.include_router(login.router, prefix="/api")
 app.include_router(send_data.router, prefix="/api")
 app.include_router(verfyjwt.router, prefix="/api")
 app.include_router(logout.router, prefix="/api")
+app.include_router(agent.router, prefix="/api")
