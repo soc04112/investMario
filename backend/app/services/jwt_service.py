@@ -14,12 +14,11 @@ def google_test():
     }
 
 class TokenJwt():
-    load_dotenv(r".env")
 
     def __init__(self, authorize_code=None, token=None):
         self.authorize_code = authorize_code
-        self.SECRET_KEY = "dev_secret_key_12345"
-        self.ALGORITHM = "HS256"
+        self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev_secret_key_12345")
+        self.ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         self.token = token
         
         self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")

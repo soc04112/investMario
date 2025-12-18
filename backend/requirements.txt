@@ -13,3 +13,10 @@ psutil
 pyupbit
 cipher
 cryptography
+openai
+langchain-community
+langchain-core
+langchain
+langchain-openai
+faiss-cpu
+sentence-transformers

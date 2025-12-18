@@ -2,7 +2,7 @@ from app.common.imports import *
 
 from app.api.config.config import SessionLocal, UserInformation, TradingHistory
 
-load_dotenv(r"../.env")
+
 
 fernet_key = os.getenv("FERNET_KEY").encode() 
 cipher = Fernet(fernet_key)

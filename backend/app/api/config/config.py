@@ -9,7 +9,7 @@ Base = declarative_base()
 from sqlalchemy.orm import sessionmaker
 
 
-load_dotenv(r"../.env")
+
 
 GOOGLE_CLOUDE_KEY = os.getenv("GOOGLE_CLOUDE_KEY")
 print(GOOGLE_CLOUDE_KEY)
