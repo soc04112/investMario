@@ -5,6 +5,7 @@ import axios from 'axios';
 import CryptoJS from 'crypto-js';
 
 
+import useUpbitData from './services/Upbit'
 
 // 코인 아이콘
 const coinIcons = {
@@ -92,6 +93,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     const [position, setPosition] = useState({})
     const [owner_coin, setOwner_Coin] = useState({})
+
     const [trade_coin, setTrade_Coin] = useState({})
     const [_time, setTime] = useState("")
 
@@ -105,6 +107,14 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
     const [loadingPositions, setLoadingPositions] = useState(true);
     const [positionError, setPositionError] = useState(null);
 
+    const [currentOwnerValue, setCurrentOwner] = useState({});
+
+
+    // Upbit Current Price Data
+    const currentPrice = useUpbitData(walletData && Object.keys(walletData).length ? walletData : null);
+
+
+    // 승엽님 hook
     useEffect(() => {
         if (!isLogin) {
              setPositionData([]);
@@ -162,6 +172,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     }, [API_KEY, API_SECRET, isLogin]); // isLogin 상태가 변경될 때만 다시 실행
 
+    
     useEffect(() => {
         if (!analzeData) return;
     
@@ -193,6 +204,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
    
     }, [analzeData]);
 
+    // Ref로 호출 제한
     useEffect(() => {
         if (!walletData) return;
 
@@ -222,6 +234,26 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
     
     }, [walletData])
 
+    const prevPriceRef = useRef({});
+    useEffect(() => {
+        if (!owner_coin || !currentPrice) return;
+
+        // 값이 실제로 달라졌을 때만 계산
+        if (JSON.stringify(prevPriceRef.current) !== JSON.stringify(currentPrice)) {
+            // 곱해서 평가금액 계산 (정수로)
+            const newOwnerValue = {};
+            Object.keys(owner_coin).forEach(coin => {
+                if (currentPrice[coin] !== undefined) {
+                    newOwnerValue[coin] = Math.floor(owner_coin[coin] * currentPrice[coin]);
+                }
+            });
+
+            setCurrentOwner(newOwnerValue);
+            prevPriceRef.current = currentPrice;
+        }
+    }, [currentPrice, owner_coin]);
+    
+
     useEffect(() => {
         if (!position || !trade_coin) return;
 
@@ -247,11 +279,11 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     // 3. [현물] 보유 코인 데이터
     const holdingData = [
-        { coin: "BTC", amount: owner_coin['BCH'], roe: "+12.5%", value: "13,800", isWin: true },
-        { coin: "ETH", amount: owner_coin['ETH'], roe: "+5.2%", value: "8,100", isWin: true },
-        { coin: "XRP", amount: owner_coin['XRP'], roe: "-2.1%", value: "21,500", isWin: false },
-        { coin: "BCH", amount: owner_coin['BCH'], roe: "-2.1%", value: "21,500", isWin: false },
-        { coin: "SOL", amount: owner_coin['SOL'], roe: "-2.1%", value: "21,500", isWin: false },                
+        { coin: "BTC", amount: owner_coin['BCH'], roe: "+12.5%", value: currentOwnerValue.BTC, isWin: true },
+        { coin: "ETH", amount: owner_coin['ETH'], roe: "+5.2%", value: currentOwnerValue.ETH, isWin: true },
+        { coin: "XRP", amount: owner_coin['XRP'], roe: "-2.1%", value: currentOwnerValue.XRP, isWin: false },
+        { coin: "BCH", amount: owner_coin['BCH'], roe: "-2.1%", value: currentOwnerValue.BCH, isWin: false },
+        { coin: "SOL", amount: owner_coin['SOL'], roe: "-2.1%", value: currentOwnerValue.SOL, isWin: false },                
     ];
 
     // 4. 통합 거래 내역 (★ category 항목 추가됨)
@@ -505,7 +537,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
                         </div>
                         <span style={{color:'var(--trade-text)'}}>{hold.amount}</span>
                         <span style={hold.isWin ? styles.pnlWin : styles.pnlLose}>{hold.roe}</span>
-                        <span style={{fontWeight:'bold'}}>${hold.value}</span>
+                        <span style={{fontWeight:'bold'}}>{hold.value}</span>
                     </div>
                 ))}
             </div>
