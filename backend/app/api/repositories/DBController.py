@@ -92,6 +92,32 @@ class DBController():
         finally:
             db.close()
 
+        try:
+            new_user = TradingHistory(
+                userid = self.userid,
+                tradenumber = 0,
+                time = datetime.utcnow().isoformat(),
+                why = {},
+                position ={},
+                average ={},
+                available =0,
+                owner_coin ={},
+                total_asset = 0,
+                trade = {},
+                trade_fee = 0, 
+            )
+
+            db.add(new_user)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            print("무결성 오류 발생")            
+        except Exception as e:
+            db.rollback()
+            print(f"오류 발생: {e}")
+        finally:
+            db.close()
+
     def user_information_update(self):
         db = SessionLocal()
         update_data = self.data
