@@ -22,6 +22,8 @@ Thumbs.db
 *.userosscache
 *.sln.docstates
 
+.vite/deps
+
 backend/myenv311/
 backend/myenv312/
 backend/myenv313/
