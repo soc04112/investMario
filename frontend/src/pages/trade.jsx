@@ -32,6 +32,8 @@ export default function TradePage({ darkMode, setDarkMode, verify, Username }) {
     const [sender_walletData, setWalletData] = useState([]);
     const [sender_analzeData, setAnalzeData] = useState([]);
 
+    const [userinfo, setUserInfo] = useState({});
+
     // 거래대금 포맷팅 함수
     const formatVolume = (numStr) => {
         if (!numStr) return "0.00";
@@ -54,9 +56,12 @@ export default function TradePage({ darkMode, setDarkMode, verify, Username }) {
     // 추가된 부분
     useEffect(() => {
         const loadUser = async () => {
-          const data = await User_Information();
-          console.log("User Information:", data);
-          if (!data) return;
+          const userinfo = await User_Information();
+            
+          if (!userinfo) return;
+          else {
+            setUserInfo(userinfo)
+          }
         };
 
         loadUser();
@@ -143,7 +148,7 @@ export default function TradePage({ darkMode, setDarkMode, verify, Username }) {
             </div>
 
             <div className="area-top-stats">
-                <TopStats isLogin={isLogin} analzeData={sender_analzeData} walletData = {sender_walletData} />
+                <TopStats isLogin={isLogin} analzeData={sender_analzeData} walletData = {sender_walletData} user_information={userinfo} />
             </div>
 
             <div className="area-main">

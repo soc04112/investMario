@@ -4,9 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import CryptoJS from 'crypto-js';
 
-// 🚨 API 키와 Secret 로드 (Vite 환경 변수 사용)
-const API_KEY = import.meta.env.VITE_BINGX_API_KEY; // User Information > bingx_access_key
-const API_SECRET = import.meta.env.VITE_BINGX_API_SECRET; // User Information > bingx_secret_key
+
 
 // 코인 아이콘
 const coinIcons = {
@@ -49,7 +47,8 @@ function getParameters(API, timestamp, urlEncode = false) {
     return parameters;
 }
 
-async function fetchBingXPositions() {
+async function fetchBingXPositions(API_KEY, API_SECRET) {
+
     if (!API_KEY || !API_SECRET) {
         throw new Error("API Key/Secret이 설정되지 않았습니다.");
     }
@@ -69,7 +68,7 @@ async function fetchBingXPositions() {
 
     const config = {
         method: API_CONFIG.method,
-        url: `/api${url}`, // 프록시가 인식하도록 '/api' 접두사 사용
+        url: `/api${url}`, 
         headers: {
             'X-BX-APIKEY': API_KEY,
         },
@@ -89,12 +88,16 @@ async function fetchBingXPositions() {
     return resp.data;
 }
 
-export default function TopStats({ isLogin, analzeData, walletData }) {
+export default function TopStats({ isLogin, analzeData, walletData, user_information }) {
+
     const [position, setPosition] = useState({})
     const [owner_coin, setOwner_Coin] = useState({})
     const [trade_coin, setTrade_Coin] = useState({})
     const [_time, setTime] = useState("")
 
+    const API_KEY = user_information['bingx_access_key'];
+    const API_SECRET = user_information['bingx_secret_key'];
+  
     const prevAnalzeRef = useRef(null);
     const prevWalletRef = useRef(null);
 
@@ -112,7 +115,7 @@ export default function TopStats({ isLogin, analzeData, walletData }) {
 
         const fetchAndSetPositions = () => {
              // 데이터 로딩 로직 (이전과 동일)
-             fetchBingXPositions()
+             fetchBingXPositions(API_KEY, API_SECRET)
                 .then(result => {
                     if (result.code === 0) {
                         const transformedData = (result.data || []).map(pos => {
@@ -157,7 +160,7 @@ export default function TopStats({ isLogin, analzeData, walletData }) {
         // 3. 클린업 함수: 컴포넌트가 언마운트되거나 useEffect가 다시 실행될 때 타이머를 해제
         return () => clearInterval(intervalId);
 
-    }, [isLogin]); // isLogin 상태가 변경될 때만 다시 실행
+    }, [API_KEY, API_SECRET, isLogin]); // isLogin 상태가 변경될 때만 다시 실행
 
     useEffect(() => {
         if (!analzeData) return;

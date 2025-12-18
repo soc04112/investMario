@@ -4,7 +4,7 @@ from app.api.config.config import SessionLocal, UserInformation, TradingHistory
 
 router = APIRouter()
 
-load_dotenv(r"C:\python\investMario\.env")
+load_dotenv(r"C:\Users\HONG\Desktop\investMario\.env")
 
 fernet_key = os.getenv("FERNET_KEY").encode() 
 cipher = Fernet(fernet_key)

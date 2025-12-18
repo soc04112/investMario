@@ -14,7 +14,7 @@ def google_test():
     }
 
 class TokenJwt():
-    load_dotenv(r"C:\python\investMario\.env")
+    load_dotenv(r"C:\Users\HONG\Desktop\investMario\.env")
 
     def __init__(self, authorize_code=None, token=None):
         self.authorize_code = authorize_code

@@ -9,12 +9,10 @@ Base = declarative_base()
 from sqlalchemy.orm import sessionmaker
 
 
-load_dotenv(r"C:\python\investMario\.env")
+load_dotenv(r"C:\Users\HONG\Desktop\investMario\.env")
 
 GOOGLE_CLOUDE_KEY = os.getenv("GOOGLE_CLOUDE_KEY")
 GOOGLE_CLOUDE_IP = os.getenv("GOOGLE_CLOUDE_IP")
-
-print("GOOGLE_CLOUDE_IP:", GOOGLE_CLOUDE_IP,   "| GOOGLE_CLOUDE_KEY:", GOOGLE_CLOUDE_KEY)
 
 DB_CONFIG = {
     "host" : GOOGLE_CLOUDE_IP,

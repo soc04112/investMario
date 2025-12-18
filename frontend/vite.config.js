@@ -8,16 +8,24 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   server: {
-      port: 3500,
-      // https: {
-      //     key: fs.readFileSync(path.join(certDir, 'key.pem')),
-      //     cert: fs.readFileSync(path.join(certDir, 'cert.pem')),
-      // },
-      // host: true, 
-      // allowedHosts: ["vt.ngrok.pro"],
-      watch: {
-        usePolling: true, 
-        interval: 100,   
-      },
+    proxy: {
+      '/api': {
+        target: 'https://open-api.bingx.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''), // /api를 제거하고 전달
+        secure: false,
+      }
+    },
+    port: 3500,
+    // https: {
+    //     key: fs.readFileSync(path.join(certDir, 'key.pem')),
+    //     cert: fs.readFileSync(path.join(certDir, 'cert.pem')),
+    // },
+    // host: true, 
+    // allowedHosts: ["vt.ngrok.pro"],
+    watch: {
+      usePolling: true, 
+      interval: 100,   
+    },
   }
 })
