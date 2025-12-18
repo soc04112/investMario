@@ -63,7 +63,8 @@ class TokenJwt():
             return None
         
     def decode_token(self):
-        return jwt.decode(self.token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+        return jwt.decode(self.token, self.SECRET_KEY, algorithms=[self.ALGORITHM], options={"verify_exp": True})
+
            
     async def generation(self):
         id_token_str = await self.authorize_token()
@@ -79,7 +80,6 @@ class TokenJwt():
         }
 
         return payload, jwt.encode(payload, self.SECRET_KEY, algorithm=self.ALGORITHM)
-
 
     def refresh_token(self):
         try:

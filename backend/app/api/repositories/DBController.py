@@ -8,7 +8,7 @@ fernet_key = os.getenv("FERNET_KEY").encode()
 cipher = Fernet(fernet_key)
 
 class DBController():
-    def __init__(self, payload, data):
+    def __init__(self, payload, data=None):
         self.userid = payload['sub']
         self.username = payload['name']
         self.email = payload['email']
