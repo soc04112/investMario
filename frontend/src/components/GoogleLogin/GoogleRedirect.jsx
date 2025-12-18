@@ -32,13 +32,10 @@ export default function GoogleRedirect() {
 
         const data = await res.json();
 
-        if (data.message === "exists") {
+        if (data.message === "exists" || data.message === "new") {
           setModalMessage(`${data.userid}님 반가워요!`);
           setShowModal(true); 
         } 
-        else if (data.message === "new") {
-          setSignShowModal(true);
-        }
 
       } catch (err) {
         console.error("Fetch error:", err);
@@ -60,7 +57,7 @@ export default function GoogleRedirect() {
       )}
       {signshowModel && (
         <WelcomeModal
-          onConfirm={() => navigate("/account")}
+          onConfirm={() => navigate("/trade")}
         />
       )}
     </>
