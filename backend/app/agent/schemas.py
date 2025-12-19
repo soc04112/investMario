@@ -38,7 +38,7 @@ TOOLS_SCHEMA = [
     "type": "function",
     "function": {
         "name": "compare_symbols",
-        "description": "Compare multiple coins",
+        "description": "Compare TWO OR MORE cryptocurrencies. Use this function when the user asks to compare multiple coins (e.g. '비트코인과 이더리움 비교'). DO NOT use get_price in this case.",
         "parameters": {
             "type": "object",
             "properties": {
