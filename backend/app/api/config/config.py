@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 # 배포
-# load_dotenv(r"../.env")
+load_dotenv(r"../.env")
 
 GOOGLE_CLOUDE_KEY = os.getenv("GOOGLE_CLOUDE_KEY")
 GOOGLE_CLOUDE_IP = os.getenv("GOOGLE_CLOUDE_IP")
