@@ -3,9 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import CryptoJS from 'crypto-js';
-
-
-import useUpbitData from './services/Upbit'
+import useUpbitData from './services/Upbit';
 
 // 코인 아이콘
 const coinIcons = {
@@ -49,7 +47,6 @@ function getParameters(API, timestamp, urlEncode = false) {
 }
 
 async function fetchBingXPositions(API_KEY, API_SECRET) {
-
     if (!API_KEY || !API_SECRET) {
         throw new Error("API Key/Secret이 설정되지 않았습니다.");
     }
@@ -74,7 +71,7 @@ async function fetchBingXPositions(API_KEY, API_SECRET) {
             'X-BX-APIKEY': API_KEY,
         },
         transformResponse: (resp) => {
-            // BigInt 이슈 처리 (15자리 이상 숫자를 문자열로 변환하여 파싱)
+            // BigInt 이슈 처리
             const jsonWithBigIntToString = resp.replace(/:(\d{15,})(?=[,}\]])/g, (_, p1) => `:"${p1}"`);
             try {
                  return JSON.parse(jsonWithBigIntToString);
@@ -93,9 +90,16 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     const [position, setPosition] = useState({})
     const [owner_coin, setOwner_Coin] = useState({})
-
     const [trade_coin, setTrade_Coin] = useState({})
     const [_time, setTime] = useState("")
+
+    // ★ 1. 비트코인 분석 데이터 상태 (청산 현황 대체)
+    const [btcStats, setBtcStats] = useState([
+        { label: "15분 RSI", value: "Loading...", subValue: "-" },
+        { label: "4시간 RSI", value: "Loading...", subValue: "-" },
+        { label: "일봉 RSI", value: "Loading...", subValue: "-" },
+        { label: "보조지표 (4H)", value: "MACD/Stoch", subValue: "Loading..." },
+    ]);
 
     const API_KEY = user_information['bingx_access_key'];
     const API_SECRET = user_information['bingx_secret_key'];
@@ -109,12 +113,58 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     const [currentOwnerValue, setCurrentOwner] = useState({});
 
-
     // Upbit Current Price Data
     const currentPrice = useUpbitData(walletData && Object.keys(walletData).length ? walletData : null);
 
+    // ★ 2. FastAPI에서 비트코인 지표 가져오기
+    useEffect(() => {
+        const fetchBitcoinAnalysis = async () => {
+            try {
+                // views.py에 정의한 엔드포인트 호출
+                const response = await axios.get('/api/bitcoin/analysis'); 
+                const data = response.data; // { "15m": {...}, "4h": {...}, "1d": {...} }
 
-    // 승엽님 hook
+                if (data) {
+                    setBtcStats([
+                        { 
+                            label: "15분 RSI", 
+                            value: data["15m"]?.rsi ?? "N/A", 
+                            subValue: data["15m"]?.status ?? "-",
+                            isRsi: true // 색상 처리를 위한 플래그
+                        },
+                        { 
+                            label: "4시간 RSI", 
+                            value: data["4h"]?.rsi ?? "N/A", 
+                            subValue: data["4h"]?.status ?? "-",
+                            isRsi: true
+                        },
+                        { 
+                            label: "일봉 RSI", 
+                            value: data["1d"]?.rsi ?? "N/A", 
+                            subValue: data["1d"]?.status ?? "-",
+                            isRsi: true
+                        },
+                        { 
+                            label: "보조지표 (4H)", 
+                            value: `M: ${data["4h"]?.macd ?? 0}`, 
+                            subValue: `K: ${data["4h"]?.stoch_k ?? 0}`,
+                            isAux: true 
+                        },
+                    ]);
+                }
+            } catch (error) {
+                console.error("Bitcoin Analysis Fetch Error:", error);
+            }
+        };
+
+        fetchBitcoinAnalysis();
+        // 10초마다 갱신 (지표는 자주 안 변하므로 10초 적당)
+        const interval = setInterval(fetchBitcoinAnalysis, 10000); 
+        return () => clearInterval(interval);
+
+    }, []);
+
+    // BingX Positions Fetch Hook
     useEffect(() => {
         if (!isLogin) {
              setPositionData([]);
@@ -124,7 +174,6 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         }
 
         const fetchAndSetPositions = () => {
-             // 데이터 로딩 로직 (이전과 동일)
              fetchBingXPositions(API_KEY, API_SECRET)
                 .then(result => {
                     if (result.code === 0) {
@@ -161,16 +210,11 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
                 });
         };
 
-        // 1. 컴포넌트 마운트 시 즉시 한 번 호출
         fetchAndSetPositions();
-
-        // 2. ★ 1초(1000ms)마다 주기적으로 호출하여 업데이트 ★
         const intervalId = setInterval(fetchAndSetPositions, 3000); 
-
-        // 3. 클린업 함수: 컴포넌트가 언마운트되거나 useEffect가 다시 실행될 때 타이머를 해제
         return () => clearInterval(intervalId);
 
-    }, [API_KEY, API_SECRET, isLogin]); // isLogin 상태가 변경될 때만 다시 실행
+    }, [API_KEY, API_SECRET, isLogin]);
 
     
     useEffect(() => {
@@ -179,7 +223,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         if (prevAnalzeRef.current &&
             JSON.stringify(prevAnalzeRef.current) === JSON.stringify(analzeData)
         ) {
-            return; // 완전히 같으면 아무 것도 안 함
+            return;
         }
 
         const keys = Object.keys(analzeData);
@@ -204,7 +248,6 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
    
     }, [analzeData]);
 
-    // Ref로 호출 제한
     useEffect(() => {
         if (!walletData) return;
 
@@ -238,9 +281,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
     useEffect(() => {
         if (!owner_coin || !currentPrice) return;
 
-        // 값이 실제로 달라졌을 때만 계산
         if (JSON.stringify(prevPriceRef.current) !== JSON.stringify(currentPrice)) {
-            // 곱해서 평가금액 계산 (정수로)
             const newOwnerValue = {};
             Object.keys(owner_coin).forEach(coin => {
                 if (currentPrice[coin] !== undefined) {
@@ -269,13 +310,6 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     }, [position]);
 
-    // 1. 청산 현황
-    const statsData = [
-        { label: "1시간 청산", short: "1.30M", long: "8.04M", total: "9.34M" },
-        { label: "4시간 청산", short: "3.49M", long: "13.77M", total: "17.26M" },
-        { label: "12시간 청산", short: "46.44M", long: "72.20M", total: "118.64M" },
-        { label: "24시간 청산", short: "106.65M", long: "94.41M", total: "201.06M" },
-    ];
 
     // 3. [현물] 보유 코인 데이터
     const holdingData = [
@@ -286,7 +320,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         { coin: "SOL", amount: owner_coin['SOL'], roe: "-2.1%", value: currentOwnerValue.SOL, isWin: false },                
     ];
 
-    // 4. 통합 거래 내역 (★ category 항목 추가됨)
+    // 4. 통합 거래 내역
     const historyData = [
         { time: _time, coin: "BTC", market: "KRW", category: "현물", type: position['BTC'], qty: trade_coin['BTC'], isBuy: true },
         { time: _time, coin: "ETH", market: "KRW", category: "현물", type: position['ETH'], qty: trade_coin['ETH'], isBuy: false },
@@ -305,7 +339,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         cardsArea: {
             flex: 0.7, 
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: 'repeat(4, 1fr)', // 4개 카드
             gap: '10px',
         },
         rightArea: {
@@ -319,10 +353,11 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
             backgroundColor: 'var(--trade-card-bg)',
             border: '1px solid var(--trade-border)', 
             borderRadius: '4px',
-            padding: '10px',
+            padding: '12px 5px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
+            alignItems: 'center',
             fontSize: '0.8rem',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)', 
         },
@@ -339,45 +374,26 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
         // --- 텍스트 스타일 ---
         title: {
-            fontSize: '0.9rem',
-            color: 'var(--trade-text)', 
-            marginBottom: '8px',
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px'
-        },
-        row_long: {
-            fontSize: '0.8rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '5px',
-            backgroundColor: 'var(--trade-bg)', 
-            padding: '6px 10px',
-            borderRadius: '2px',
-            alignItems: 'center',
-        },
-        row_short: {
-            fontSize: '0.8rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '5px',
-            backgroundColor: 'var(--trade-bg)', 
-            padding: '6px 10px',
-            borderRadius: '2px',
-            alignItems: 'center',
-        },
-        row_total: {
             fontSize: '0.85rem',
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: '2px',
-            marginTop: '5px',
             color: 'var(--trade-subtext)', 
+            marginBottom: '8px',
+            fontWeight: '600',
         },
-        shortText: { color: '#f23645', fontWeight: 'bold' }, 
-        longText: { color: '#089981', fontWeight: 'bold' },  
-        totalText: { fontSize: '1rem', fontWeight: 'bold', color: 'var(--trade-text)' }, 
+        valueText: {
+            fontSize: '1.2rem',
+            fontWeight: 'bold',
+            color: 'var(--trade-text)',
+            marginBottom: '4px'
+        },
+        subValueText: {
+            fontSize: '0.8rem',
+            fontWeight: 'bold',
+            color: 'var(--trade-subtext)',
+        },
+        // RSI 상태별 색상 (과매수: Red, 과매도: Green)
+        rsiHigh: { color: '#f23645' }, // 70 이상 (과매수 위험)
+        rsiLow: { color: '#089981' },  // 30 이하 (과매도 기회)
+        rsiNeutral: { color: 'var(--trade-text)' }, 
 
         // --- 테이블 헤더 ---
         sectionHeader: {
@@ -395,7 +411,6 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         // 포지션 헤더
         posHeader: {
             display: 'grid',            
-            // 코인 | Side | 진입가 | 수량 | 미실현 | 실현 | 청산가
             gridTemplateColumns: '0.7fr 0.6fr 1fr 0.8fr 1fr 1fr 1fr',  
             padding: '6px 0', fontSize: '0.65rem', fontWeight: 'bold',
             backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
@@ -409,10 +424,9 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
             backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
             color: 'var(--trade-subtext)', textAlign: 'center', 
         },
-        // ★ 거래내역 헤더 (6개 컬럼으로 변경)
+        // 거래내역 헤더
         histHeader: {
             display: 'grid',
-            // 시간 | 코인 | 마켓 | 구분 | 종류 | 수량
             gridTemplateColumns: '0.7fr 0.8fr 0.6fr 0.6fr 0.6fr 0.8fr', 
             padding: '6px 0', fontSize: '0.65rem', fontWeight: 'bold',
             backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
@@ -444,7 +458,6 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
             backgroundColor: 'rgba(242, 54, 69, 0.15)', color: '#f23645',
             padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
         },
-        // ★ 구분(선물/현물) 배지 스타일
         badgeSpot: {
             backgroundColor: 'rgba(41, 98, 255, 0.1)', color: '#2962ff',
             padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
@@ -536,20 +549,17 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
                         </div>
                         <span style={{color:'var(--trade-text)'}}>{hold.amount}</span>
                         <div className='won'
-                        style={
-                            {
-                                
+                        style={{
                                 fontWeight:'bold',
                                 display:'flex',
                                 flexDirection:'row',
                                 justifyContent:'space-between',
                                 paddingRight:'30px',
-                                paddingLeft:'30px'       
-                            }
-                            }>
+                                paddingLeft:'30px'      
+                            }}>
 
                             <div>{Number(hold.value).toLocaleString()}</div>
-                            <div>{'\u20A9'}</div>                            
+                            <div>{'\u20A9'}</div>                             
                         </div>
                     </div>
                 ))}
@@ -557,7 +567,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
         </div>
     );
 
-    // [3] 거래 내역 (★ 구분 컬럼 추가됨)
+    // [3] 거래 내역
     const renderHistoryTable = () => (
         <div style={styles.historyBox}>
             <div style={styles.sectionHeader}>
@@ -568,7 +578,7 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
                 <span>시간</span>
                 <span>코인</span>
                 <span>마켓</span>
-                <span>구분</span> {/* 추가됨 */}
+                <span>구분</span>
                 <span>종류</span>
                 <span>수량</span>
             </div>
@@ -581,14 +591,11 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
                             <span>{trade.coin}</span>
                         </div>
                         <span style={{color:'var(--trade-subtext)'}}>{trade.market}</span>
-                        
-                        {/* ★ 구분 컬럼 (현물/선물) */}
                         <div>
                             <span style={trade.category === '선물' ? styles.badgeFuture : styles.badgeSpot}>
                                 {trade.category}
                             </span>
                         </div>
-                        
                         <div>
                             <span style={trade.type == "hold" ? styles.badgeLong : styles.badgeShort}>{trade.type}</span>
                         </div>
@@ -601,27 +608,30 @@ export default function TopStats({ isLogin, analzeData, walletData, user_informa
 
     return (
         <div style={styles.container}>
-            {/* 좌측: 청산 현황 */}
+            {/* 좌측: 비트코인 기술적 분석 (RSI 등) */}
             <div style={styles.cardsArea}>
-                {statsData.map((stat, idx) => (
-                    <div key={idx} style={styles.card}>
-                        <div style={styles.title}>⚡ {stat.label}</div>
-                        <div style={styles.row_long}>
-                            <span style={{color:'var(--trade-subtext)'}}>롱 청산</span>
-                            <span style={styles.longText}>${stat.long}</span>
+                {btcStats.map((stat, idx) => {
+                    // RSI 값에 따른 색상 처리
+                    let valueStyle = styles.valueText;
+                    let subStyle = styles.subValueText;
+                    
+                    if (stat.isRsi && typeof stat.value === 'number') {
+                        if (stat.value >= 70) valueStyle = { ...valueStyle, ...styles.rsiHigh }; // 과매수(빨강)
+                        else if (stat.value <= 30) valueStyle = { ...valueStyle, ...styles.rsiLow }; // 과매도(초록)
+                        
+                        // 상태 텍스트 색상도 동일하게 적용
+                        if (stat.subValue.includes("매도")) subStyle = { ...subStyle, ...styles.rsiHigh };
+                        if (stat.subValue.includes("매수")) subStyle = { ...subStyle, ...styles.rsiLow };
+                    }
+
+                    return (
+                        <div key={idx} style={styles.card}>
+                            <div style={styles.title}>{stat.label}</div>
+                            <div style={valueStyle}>{stat.value}</div>
+                            <div style={subStyle}>{stat.subValue}</div>
                         </div>
-                        <div style={styles.row_short}>
-                            <span style={{color:'var(--trade-subtext)'}}>숏 청산</span>
-                            <span style={styles.shortText}>${stat.short}</span>
-                        </div>
-                        <div style={styles.row_total}>
-                            <span>총 청산</span>
-                        </div>
-                        <div style={{textAlign:'center'}}>
-                            <span style={styles.totalText}>${stat.total}</span>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             
             {/* 우측: 포지션 - 보유코인 - 거래내역 */}

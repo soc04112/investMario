@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import '../../styles/dashboard/ProfileModal.css';
 
 export default function ProfileModal({ onClose }) {
-    const [activeTab, setActiveTab] = useState('profile');
+    const [activeTab, setActiveTab] = useState('wallet');
 
     // API Key 입력을 위한 상태 관리
     const [apiKeys, setApiKeys] = useState({
