@@ -3,6 +3,8 @@ from app.common.imports import *
 from app.api.config.config import SessionLocal, UserInformation, TradingHistory
 from app.services.upbit_api import exchange_information
 
+import concurrent.futures
+
 access_logger = logging.getLogger("uvicorn.access")
 
 # 성공 http200 log 안뜨도록 
@@ -62,21 +64,32 @@ async def datalist(request: Request, body:WalletRequest, db: Session = Depends(g
     available_cash = 0
     trade_history = {}
 
-    if account.usercustom['exchange'] != "":
-        try:
+    def fetch_upbit(account):
+        if account.usercustom['exchange'] != "":
             exchange = account.usercustom['exchange']
             ticker = account.usercustom['ticker']
-
             if exchange == "Upbit":
-                _upbit = exchange_information(access_key=account.key['upbit']['access'],
-                                            secret_key=account.key['upbit']['secret'],
-                                            ticker=ticker,
-                                            currency="KRW")
-                available_cash, coin_list, trade_history = _upbit
-        except Exception as e:
-            coin_list = {}
-            available_cash = 0
-            trade_history = {}
+                return exchange_information(
+                    access_key=account.key['upbit']['access'],
+                    secret_key=account.key['upbit']['secret'],
+                    ticker=ticker,
+                    currency="KRW"
+                )
+        return {}, 0, {}
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(fetch_upbit, account)
+            available_cash, coin_list, trade_history = future.result(timeout=10)
+    except concurrent.futures.TimeoutError:
+        coin_list = {}
+        available_cash = 0
+        trade_history = {}
+    except Exception as e:
+        logging.error(f"Upbit API error: {e}")
+        coin_list = {}
+        available_cash = 0
+        trade_history = {}
     
     variable_data = []
     # 정리
