@@ -8,6 +8,7 @@ from app.api.routers import agent
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        print("DB 연결 시도")
         conn = get_connection()
         cur = conn.cursor()
         cur.execute("SELECT NOW();")
