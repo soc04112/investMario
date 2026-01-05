@@ -529,7 +529,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    Information에서 거래소를 설정해 주세요.
+                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>
@@ -595,7 +595,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    Information에서 거래소를 설정해 주세요.
+                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>

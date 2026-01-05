@@ -23,8 +23,8 @@
 
 .form-group label {
   margin-bottom: 6px;
-  font-weight: bold;
-  font-size: 0.9em;
+  /* font-weight: bold;  <-- 제거: 굵기 통일 (일반 텍스트) */
+  font-size: 1em;     /* <-- 수정: 0.9em -> 1em (크기 통일) */
   display: block;
 }
 
@@ -79,6 +79,13 @@
 /* toggle 버튼 */
 .toggle-group {
   margin-bottom: 20px;
+}
+
+/* toggle-group 내의 label도 스타일 통일을 위해 추가 가능 (선택 사항) */
+.toggle-group label {
+  margin-bottom: 6px;
+  font-size: 1em;
+  display: block;
 }
 
 .toggle-btn {
