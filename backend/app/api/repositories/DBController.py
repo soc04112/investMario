@@ -133,11 +133,15 @@ class DBController():
             existing_money = user.money or {}
             existing_key = user.key or {}
 
-            # --- 키 암호화 함수 ---
+            # --- 키 암호화 함수 수정 ---
             def encrypt_key(new_value, existing_value):
+                # 빈 문자열("")이 들어오면 키를 삭제(빈 값으로 설정)
+                if new_value == "":
+                    return ""
+                # 값이 있으면 암호화, 없으면(None) 기존 값 유지
                 return cipher.encrypt(new_value.encode()).decode() if new_value else existing_value or ""
 
-            # --- 키 업데이트 (값이 있을 때만 덮어쓰기) ---
+            # --- 키 업데이트 ---
             user.key = {
                 "upbit": {
                     "access": encrypt_key(update_data.get('upbit_access_key'), existing_key.get('upbit', {}).get('access')),

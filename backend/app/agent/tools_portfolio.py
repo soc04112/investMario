@@ -26,7 +26,7 @@ def get_user_profile(userid: str):
     finally:
         db.close()
 
-def get_latest_strategy(userid: str, limit: int = 5):
+def get_latest_strategy(userid: str,limit: int = 5):
     db = SessionLocal()
     try:
         rows = (

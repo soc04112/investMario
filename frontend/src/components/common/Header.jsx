@@ -9,8 +9,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
 
     const [showProfileModal, setShowProfileModal] = useState(false);
     
-    
-
     // [1] 레버리지 상태 (DB 대신 로컬 스토리지 사용)
     const [leverage, setLeverage] = useState(() => {
         // 화면 로드 시 저장된 값이 있으면 가져오고, 없으면 10으로 초기화
@@ -20,7 +18,8 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
     const [showLev, setShowLev] = useState(false); 
 
     // [2] 코인 거래 성향 상태
-    const [tendency, setTendency] = useState("공격형");
+    // 초기값을 "미설정"으로 변경하여 클릭 가능하도록 함
+    const [tendency, setTendency] = useState("미설정");
     const [showTendency, setShowTendency] = useState(false);
 
     // [3] 자금 및 등급 상태
@@ -49,9 +48,8 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                         
                         // 등급, 자금, 성향은 DB 데이터 사용
                         if (data) {
-                            if (data.play) setTendency(data.play);
-                            
-                            // 레버리지는 DB에서 가져오지 않고 로컬 변수(state) 유지
+                            // DB 값이 있으면 설정, 없으면 "미설정" 유지
+                            setTendency(data.play || "미설정");
                         }
                     }
                 } catch (error) {
@@ -75,47 +73,108 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
     const getTendencyColor = (t) => {
         if (t === "공격형") return "text-red";
         if (t === "안전형") return "text-green";
+        if (t === "미설정") return ""; // 미설정은 기본 색상 (흰색/회색)
         return "text-yellow"; 
     };
 
-    // DB 설정 저장 함수 (성향 저장용)
-    const saveUserSetting = async (key, value) => {
+    // DB 정보 업데이트 함수
+    const updateUserInfo = async (dataObj) => {
         try {
             await fetch('/api/userinfo_modify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    data: { [key]: value }
+                    data: dataObj
                 })
             });
         } catch (error) {
-            console.error(`Failed to save ${key}:`, error);
+            console.error("Failed to save user info:", error);
         }
+    };
+
+    // 자동매매 실행 조건 검사 함수
+    const validateSettings = () => {
+        if (!user_information) {
+             alert("사용자 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+             return false;
+        }
+
+        const { exchange, usemodel, gpt_key, grok_key, upbit_key, bingx_key } = user_information;
+
+        if (!exchange || exchange === "없음") {
+            alert("자동매매를 시작하려면 먼저 '내 정보'에서 거래소를 선택해주세요.");
+            return false;
+        }
+
+        if (!usemodel || usemodel === "없음") {
+            alert("자동매매를 시작하려면 먼저 '내 정보'에서 AI 모델을 선택해주세요.");
+            return false;
+        }
+
+        if (usemodel.startsWith("GPT") && !gpt_key) {
+            alert("GPT API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
+            return false;
+        }
+        if (usemodel.startsWith("Grok") && !grok_key) {
+            alert("Grok API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
+            return false;
+        }
+
+        if (exchange === "Upbit" && !upbit_key) {
+            alert("Upbit API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
+            return false;
+        }
+        if (exchange === "BingX" && !bingx_key) {
+            alert("BingX API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
+            return false;
+        }
+
+        return true;
     };
 
     // ★ 확인 팝업 - '예' 클릭 시 실행
-    const handleConfirmYes = () => {
+    const handleConfirmYes = async () => {
         if (confirmType === 'leverage') {
             setShowLev(false);
-            
-            // [수정] 레버리지는 DB가 아닌 로컬 스토리지에 '변수'로 저장
             localStorage.setItem('user_leverage', leverage);
             console.log("Leverage saved locally:", leverage);
+            setShowConfirm(false);
 
         } else if (confirmType === 'tendency') {
+            // [수정] "미설정"으로 되돌리는 경우가 아니라면 유효성 검사 수행
+            if (pendingValue !== "미설정" && !validateSettings()) {
+                setShowConfirm(false);
+                return;
+            }
+
             setTendency(pendingValue);
             setShowTendency(false);
+            setShowConfirm(false); 
             
-            // 성향은 DB에 저장 (기존 유지)
-            saveUserSetting('play', pendingValue);
+            // 성향에 따른 프롬프트 자동 설정
+            let newPrompt = "";
+            if (pendingValue === "공격형") {
+                newPrompt = "공격적으로 투자해줘";
+            } else if (pendingValue === "중립형") {
+                newPrompt = "중립적으로 투자해줘";
+            } else if (pendingValue === "안전형") {
+                newPrompt = "안전적으로 투자해줘";
+            } else if (pendingValue === "미설정") {
+                newPrompt = ""; // 프롬프트 초기화
+            }
+
+            // DB 저장
+            await updateUserInfo({ 
+                play: pendingValue === "미설정" ? "" : pendingValue, // 미설정이면 빈 값 저장
+                user_prompt: newPrompt
+            });
+
+            window.location.reload();
         }
-        setShowConfirm(false); 
     };
 
-    // ★ 확인 팝업 - '아니오' 클릭 시 실행
     const handleConfirmNo = () => {
         if (confirmType === 'leverage') {
-            // 취소 시 저장된 값으로 되돌리기 (선택 사항)
             const saved = localStorage.getItem('user_leverage');
             setLeverage(saved ? parseInt(saved, 10) : 10);
         }
@@ -128,8 +187,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
         window.location.reload();
     };
 
-
-    // 로그 아웃
     const handleLogout = async () => {
         const res = await fetch(`${import.meta.env.VITE_POST_URL}/api/logout`, {
         method: "POST",
@@ -163,51 +220,48 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                         <span className="value">{capital.toLocaleString()} 원</span>
                     </div>
                     {/* [1] 포지션 성향 (레버리지) */}
-                    <div className="info-item" style={{ 
-                        position: 'relative', 
-                        }}>
-                    <span className="label">포지션 성향:</span>
-                    <button
-                        className="leverage-btn"
-                        onClick={() => {
-                        setShowLev(!showLev);
-                        setShowTendency(false);
-                        }}
-                    >
-                        {leverage}x
-                    </button>
-
-                    {showLev && (
-                        <div className="leverage-popup">
-                        <div className="lev-header">
-                            <span>Leverage</span>
-                            <span className="lev-val">{leverage}x</span>
-                        </div>
-                        <input
-                            type="range"
-                            min="1"
-                            max="100"
-                            step="1"
-                            value={leverage}
-                            onChange={(e) => setLeverage(e.target.value)}
-                            className="lev-slider"
-                        />
-                        <div className="lev-marks">
-                            <span>1x</span>
-                            <span>50x</span>
-                            <span>100x</span>
-                        </div>
-                        <div
-                            className="popup-confirm-btn"
+                    <div className="info-item" style={{ position: 'relative' }}>
+                        <span className="label">포지션 성향:</span>
+                        <button
+                            className="leverage-btn"
                             onClick={() => {
-                            setConfirmType('leverage');
-                            setShowConfirm(true);
+                            setShowLev(!showLev);
+                            setShowTendency(false);
                             }}
                         >
-                            확인
-                        </div>
-                        </div>
-                    )}
+                            {leverage}x
+                        </button>
+                        {showLev && (
+                            <div className="leverage-popup">
+                                <div className="lev-header">
+                                    <span>Leverage</span>
+                                    <span className="lev-val">{leverage}x</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="100"
+                                    step="1"
+                                    value={leverage}
+                                    onChange={(e) => setLeverage(e.target.value)}
+                                    className="lev-slider"
+                                />
+                                <div className="lev-marks">
+                                    <span>1x</span>
+                                    <span>50x</span>
+                                    <span>100x</span>
+                                </div>
+                                <div
+                                    className="popup-confirm-btn"
+                                    onClick={() => {
+                                    setConfirmType('leverage');
+                                    setShowConfirm(true);
+                                    }}
+                                >
+                                    확인
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* [2] 코인 거래 성향 */}
@@ -216,16 +270,19 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                     <button
                         className={`tendency-btn ${getTendencyColor(tendency)}`}
                         onClick={() => {
-                        setShowTendency(!showTendency);
-                        setShowLev(false);
+                            // 클릭 방지 로직 제거
+                            setShowTendency(!showTendency);
+                            setShowLev(false);
                         }}
+                        style={{ minWidth: '60px' }}
                     >
                         {tendency}
                     </button>
 
                     {showTendency && (
                         <div className="tendency-popup">
-                        {["공격형", "중립형", "안전형"].map((type) => (
+                        {/* [수정] 옵션에 "미설정" 추가 */}
+                        {["미설정", "공격형", "중립형", "안전형"].map((type) => (
                             <div
                             key={type}
                             className={`tendency-option ${tendency === type ? 'active' : ''}`}
@@ -285,12 +342,10 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
             )}
             </div>
 
-            {/* 프로필 모달 */}
             {showProfileModal && (
                 <ProfileModal onClose={() => setShowProfileModal(false)} user_information={user_information}/>
             )}
 
-            {/* 확인 팝업 */}
             {showConfirm && (
                 <div className="confirm-overlay">
                     <div className="confirm-box">
