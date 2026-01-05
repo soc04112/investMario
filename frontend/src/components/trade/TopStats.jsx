@@ -4,6 +4,7 @@ import axios from 'axios';
 import CryptoJS from 'crypto-js';
 
 import useUpbitData from './services/Upbit'
+import { RSI, MACD } from 'technicalindicators';
 
 // 코인 아이콘
 const coinIcons = {
@@ -103,6 +104,40 @@ export default function TopStats({ isLogin, walletData, user_information }) {
     const currentPrice = useUpbitData(walletData && Object.keys(walletData).length ? walletData : null);
 
     useEffect(() => {
+        const updateIndicators = async () => {
+            try {
+                const fetchK = async (iv) => {
+                    const res = await axios.get(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${iv}&limit=100`);
+                    return res.data.map(d => parseFloat(d[4]));
+                };
+
+                const [c15m, c4h] = await Promise.all([fetchK("15m"), fetchK("4h")]);
+
+                // 지표 계산
+                const r15 = RSI.calculate({ values: c15m, period: 14 }).pop() || 0;
+                const r4 = RSI.calculate({ values: c4h, period: 14 }).pop() || 0;
+                const m15 = MACD.calculate({ values: c15m, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).pop() || { MACD: 0, signal: 0 };
+                const m4 = MACD.calculate({ values: c4h, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).pop() || { MACD: 0, signal: 0 };
+
+                // 기존 UI 구조(short, long, total)에 값 매칭
+                setStatsData([
+                    { label: "15분 RSI", short: "RSI", long: r15.toFixed(2), total: r15 > 70 ? "과매수" : r15 < 30 ? "과매도" : "보통" },
+                    { label: "4시간 RSI", short: "RSI", long: r4.toFixed(2), total: r4 > 70 ? "과매수" : r4 < 30 ? "과매도" : "보통" },
+                    { label: "15분 MACD", short: "Sig", long: m15.signal.toFixed(2), total: m15.MACD.toFixed(2) },
+                    { label: "4시간 MACD", short: "Sig", long: m4.signal.toFixed(2), total: m4.MACD.toFixed(2) },
+                ]);
+            } catch (e) { console.error(e); }
+        };
+
+        updateIndicators();
+        const timer = setInterval(updateIndicators, 60000);
+        return () => clearInterval(timer);
+    }, []);
+
+
+
+
+    useEffect(() => {
         setapikey(user_information['bingx_access_key'])
         setapisecert(user_information['bingx_secret_key'])
 
@@ -124,10 +159,6 @@ export default function TopStats({ isLogin, walletData, user_information }) {
         }
 
         const fetchAndSetPositions = () => {
-            if (!API_KEY || !API_SECRET) {
-                return; 
-            }
-
              // 데이터 로딩 로직 (이전과 동일)
              fetchBingXPositions(API_KEY, API_SECRET)
                 .then(result => {
@@ -243,12 +274,12 @@ export default function TopStats({ isLogin, walletData, user_information }) {
     }, [currentPrice, walletData]);
 
     // 1. 청산 현황
-    const statsData = [
-        { label: "1시간 청산", short: "1.30M", long: "8.04M", total: "9.34M" },
-        { label: "4시간 청산", short: "3.49M", long: "13.77M", total: "17.26M" },
-        { label: "12시간 청산", short: "46.44M", long: "72.20M", total: "118.64M" },
-        { label: "24시간 청산", short: "106.65M", long: "94.41M", total: "201.06M" },
-    ];
+    const [statsData, setStatsData] = useState([
+    { label: "15분 RSI", short: "로딩중", long: "로딩중", total: "로딩중" },
+    { label: "4시간 RSI", short: "로딩중", long: "로딩중", total: "로딩중" },
+    { label: "15분 MACD", short: "로딩중", long: "로딩중", total: "로딩중" },
+    { label: "4시간 MACD", short: "로딩중", long: "로딩중", total: "로딩중" },
+]);
 
 
 
@@ -439,8 +470,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
             </div>
             <div style={{overflowY:'auto', flex:1}} className="custom-scroll">
                 {loadingPositions && (
-                    // <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>포지션 데이터를 불러오는 중...</div>
-                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>LOADING 중...</div>
+                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>포지션 데이터를 불러오는 중...</div>
                 )}
 
                 {!loadingPositions && positionError && (
@@ -529,7 +559,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
+                    Information에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>
@@ -595,7 +625,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
+                    Information에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>
@@ -609,18 +639,18 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                     <div key={idx} style={styles.card}>
                         <div style={styles.title}>⚡ {stat.label}</div>
                         <div style={styles.row_long}>
-                            <span style={{color:'var(--trade-subtext)'}}>롱 청산</span>
+                            <span style={{color:'var(--trade-subtext)'}}>지표값</span>
                             <span style={styles.longText}>${stat.long}</span>
                         </div>
-                        <div style={styles.row_short}>
+                        {/* <div style={styles.row_short}>
                             <span style={{color:'var(--trade-subtext)'}}>숏 청산</span>
                             <span style={styles.shortText}>${stat.short}</span>
-                        </div>
+                        </div> */}
                         <div style={styles.row_total}>
-                            <span>총 청산</span>
+                            <span>현재 상태</span>
                         </div>
                         <div style={{textAlign:'center'}}>
-                            <span style={styles.totalText}>${stat.total}</span>
+                            <span style={styles.totalText}>{stat.total}</span>
                         </div>
                     </div>
                 ))}
