@@ -12,9 +12,31 @@ TOOLS_SCHEMA = [
         "parameters": {
             "type": "object",
             "properties": {
-                "symbol": {"type": "string"}
+                "symbol": {"type": "string"},
             },
             "required": ["symbol"]
+        }
+    }
+},
+
+{
+    "type": "function",
+    "function": {
+        "name": "get_price_by_date",
+        "description": "Get historical crypto price for a specific date range",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Crypto symbol or name"
+                },
+                "date_start": {
+                    "type": "string",
+                    "description": "ISO8601 date (YYYY-MM-DD)"
+                }
+            },
+            "required": ["symbol", "date_start"]
         }
     }
 },

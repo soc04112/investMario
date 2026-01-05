@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timezone
 
 BASE = "https://api.coingecko.com/api/v3"
 
@@ -176,32 +177,56 @@ def normalize_symbol(text: str) -> str:
     # 여기까지 못 찾으면 에러
     raise ValueError(f"지원하지 않는 코인입니다: {text}")
 
+# 날짜별 가격 조회
+def get_price_by_date(symbol: str, date_start: str):
+    dt = datetime.fromisoformat(date_start)
+
+    coin_id = normalize_symbol(symbol)
+    date_str = dt.strftime("%d-%m-%Y")
+
+    data = cg_get(
+        f"/coins/{coin_id}/history",
+        params={"date": date_str}
+    )
+
+    market = data.get("market_data")
+    if not market or "current_price" not in market:
+        return {
+            "symbol": symbol.upper(),
+            "name": data.get("name"),
+            "date": date_start,
+            "price_usd": None,
+        }
+
+    return {
+        "symbol": data["symbol"].upper(),
+        "name": data["name"],
+        "price_usd": market["current_price"]["usd"],
+        "market_cap": market["market_cap"]["usd"],
+        "date": date_start
+    }
+
 # 단일 코인 가격
-def get_price(symbol):
+def get_price(symbol: str):
     coin_id = normalize_symbol(symbol)
 
     data = cg_get(
         "/coins/markets",
         params={
-            "vs_currency":"usd",
-            "ids":coin_id,
+            "vs_currency": "usd",
+            "ids": coin_id
         }
-    )
-
-    if not data:
-        raise ValueError(f"No CoinGecko response for symbol: {symbol}")
-
-    d = data[0]
+    )[0]
 
     return {
-        "symbol": d["symbol"].upper(),
-        "name": d["name"],
-        "price_usd": d["current_price"],
-        "change_24h": d["price_change_percentage_24h"],
-        "market_cap": d["market_cap"],
-        "rank": d["market_cap_rank"],
+        "symbol": data["symbol"].upper(),
+        "name": data["name"],
+        "price_usd": data["current_price"],
+        "change_24h": data["price_change_percentage_24h"],
+        "market_cap": data["market_cap"],
+        "rank": data["market_cap_rank"],
+        "date": datetime.utcnow().strftime("%Y-%m-%d")
     }
-
 
 # 24시간 통계
 def get_24h_stats(symbol: str):
@@ -228,6 +253,9 @@ def get_24h_stats(symbol: str):
 
 # 다종목 비교
 def compare_symbols(symbols: list[str]):
+    if isinstance(symbols, str):
+        symbols = re.findall(r"[a-z0-9\-]+|[가-힣]+", symbols)
+        
     ids = ",".join(normalize_symbol(s) for s in symbols)
 
     results = cg_get(

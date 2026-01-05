@@ -16,7 +16,7 @@ def get_term_db():
 
 
 
-def search_crypto_term(query, top_k=3):
+def search_crypto_term(query,top_k=2):
     db = get_term_db()
     results = db.similarity_search(query, k=top_k)
 
