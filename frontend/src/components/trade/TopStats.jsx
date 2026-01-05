@@ -124,6 +124,10 @@ export default function TopStats({ isLogin, walletData, user_information }) {
         }
 
         const fetchAndSetPositions = () => {
+            if (!API_KEY || !API_SECRET) {
+                return; 
+            }
+
              // 데이터 로딩 로직 (이전과 동일)
              fetchBingXPositions(API_KEY, API_SECRET)
                 .then(result => {
@@ -435,7 +439,8 @@ export default function TopStats({ isLogin, walletData, user_information }) {
             </div>
             <div style={{overflowY:'auto', flex:1}} className="custom-scroll">
                 {loadingPositions && (
-                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>포지션 데이터를 불러오는 중...</div>
+                    // <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>포지션 데이터를 불러오는 중...</div>
+                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>LOADING 중...</div>
                 )}
 
                 {!loadingPositions && positionError && (
@@ -524,7 +529,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    Information에서 거래소를 설정해 주세요.
+                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>
@@ -590,7 +595,7 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         fontSize: '1em',
                     }}
                 >
-                    Information에서 거래소를 설정해 주세요.
+                    "내정보" {'>'} "현물 거래 설정"에서 거래소를 설정해 주세요.
                 </div>
             )}
         </div>
