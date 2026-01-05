@@ -136,8 +136,6 @@ export default function ProfileModal({ onClose, user_information }) {
                                 <button style={{background:'#2962ff', color:'white', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontSize:'0.85rem'}}>변경</button>
                             </div>
                         </div>
-
-                        {/* 2단계 인증 (2FA) - 삭제됨 */}
                     </>
                 );
 
@@ -182,7 +180,6 @@ export default function ProfileModal({ onClose, user_information }) {
                     >
                         <i className="fa-solid fa-key"></i> API 설정
                     </div>
-                    {/* 보안 설정 메뉴 삭제됨 */}
                 </div>
 
                 {/* 우측 콘텐츠 */}

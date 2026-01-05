@@ -221,7 +221,7 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                     </div>
                     {/* [1] 포지션 성향 (레버리지) */}
                     <div className="info-item" style={{ position: 'relative' }}>
-                        <span className="label">포지션 성향:</span>
+                        <span className="label">포지션(선물) 성향:</span>
                         <button
                             className="leverage-btn"
                             onClick={() => {
@@ -266,7 +266,7 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
 
                     {/* [2] 코인 거래 성향 */}
                     <div className="info-item" style={{ position: 'relative' }}>
-                    <span className="label">코인 거래 성향:</span>
+                    <span className="label">코인 거래(현물) 성향:</span>
                     <button
                         className={`tendency-btn ${getTendencyColor(tendency)}`}
                         onClick={() => {
