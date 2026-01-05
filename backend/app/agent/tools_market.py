@@ -140,12 +140,7 @@ MAJOR_SYMBOL_MAP = {
     "시바": "shiba-inu",
     "시바이누": "shiba-inu",
 
-    # dogwifhat
-    "wif": "dogwifcoin",
-    "dogwifhat": "dogwifcoin",
-    "도지" : "dogwifcoin",
-    "도지코인" : "dogwifcoin",
-    "도지 코인" : "dogwifcoin",
+
 
     # bonk
     "bonk": "bonk",

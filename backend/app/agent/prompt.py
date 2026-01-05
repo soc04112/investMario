@@ -43,6 +43,30 @@ AVAILABLE TOOLS (JSON):
 - 최신 전략 → get_latest_strategy
 - 기간별 전략 → get_strategy_by_date
 
+CRITICAL CONTEXT RULES
+────────────────────────
+
+Some tools require a coin symbol (e.g. get_price, get_price_by_date, get_24h_stats, get_market_cap).
+
+When preparing arguments for those tools, you MUST decide:
+
+- If the user EXPLICITLY mentions a coin name or symbol
+  → set `"use_last_symbol": false`
+  → include `"symbol"` if known
+
+- If the user is CLEARLY referring to a previously mentioned coin
+  (e.g. follow-up questions like "어제는?", "그 코인", "그럼 어제는?")
+  → set `"use_last_symbol": true`
+  → DO NOT include `"symbol"`
+
+IMPORTANT:
+- NEVER guess a coin symbol
+- NEVER change a coin unless explicitly mentioned
+- Use `"use_last_symbol": true` ONLY when the intent clearly refers to prior context
+
+OUTPUT FORMAT (STRICT)
+────────────────────────
+
 You MUST respond with EXACTLY one of the following:
 
 1. If a tool is required:
@@ -72,12 +96,14 @@ You will receive:
 - the user's original question
 - the result of ONE executed tool (JSON)
 
-Explain the result clearly and naturally in Korean.
+Your task:
+- Explain the tool result clearly and naturally in Korean
 
 Rules:
 - Do NOT return JSON
 - Do NOT call any tools
-- Use ONLY the tool result
-- Do NOT speculate or add information
-- If data is missing, say it is unavailable
+- Use ONLY the provided tool result
+- Do NOT speculate or add new information
+- If some data is missing or null, explicitly say it is unavailable
+- Keep the explanation concise and factual
 """
