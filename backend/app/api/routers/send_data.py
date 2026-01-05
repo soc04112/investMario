@@ -52,6 +52,8 @@ async def datalist(request: Request, body:WalletRequest, db: Session = Depends(g
     account = db.query(UserInformation) \
         .filter(UserInformation.userid == id).first()
 
+
+    # 고정 부분
     static_data = {
         "username": account.userinfo['username'],
         "usemodel": account.userinfo['usemodel'],
@@ -63,7 +65,6 @@ async def datalist(request: Request, body:WalletRequest, db: Session = Depends(g
     available_cash = 0
     trade_history = {}
 
-    print("오류")
     if account.usercustom['exchange'] != "":
         try:
             exchange = account.usercustom['exchange']
@@ -80,7 +81,6 @@ async def datalist(request: Request, body:WalletRequest, db: Session = Depends(g
             available_cash = 0
             trade_history = {}
 
-    print("오류2")
     variable_data = []
     # 정리
     for history in history_list:
