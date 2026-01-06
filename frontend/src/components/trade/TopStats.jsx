@@ -6,7 +6,6 @@ import CryptoJS from 'crypto-js';
 import useUpbitData from './services/Upbit'
 import { RSI, MACD } from 'technicalindicators';
 
-// 코인 아이콘
 const coinIcons = {
     BTC: "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=025",
     ETH: "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=025",
@@ -18,9 +17,7 @@ const coinIcons = {
 const API_CONFIG = {
     "uri": "/openApi/swap/v2/user/positions",
     "method": "GET",
-    "payload": {
-        "symbol": "BTC-USDT" // 원하는 심볼로 변경 가능
-    },
+    "payload": { "symbol": "BTC-USDT" },
 };
 
 function getParameters(API, timestamp, urlEncode = false) {
@@ -35,7 +32,6 @@ function getParameters(API, timestamp, urlEncode = false) {
             }
         }
     }
-
     if (parameters) {
         parameters = parameters.substring(0, parameters.length - 1);
         parameters = parameters + "&timestamp=" + timestamp;
@@ -46,62 +42,42 @@ function getParameters(API, timestamp, urlEncode = false) {
 }
 
 async function fetchBingXPositions(API_KEY, API_SECRET) {
-
-    if (!API_KEY || !API_SECRET) {
-        throw new Error("API Key/Secret이 설정되지 않았습니다.");
-    }
-
+    if (!API_KEY || !API_SECRET) throw new Error("API Key/Secret이 설정되지 않았습니다.");
     const timestamp = new Date().getTime();
-
-    // 1. Signature 생성
     const parameterString = getParameters(API_CONFIG, timestamp);
     const sign = CryptoJS.enc.Hex.stringify(CryptoJS.HmacSHA256(parameterString, API_SECRET));
-
-    // 2. 최종 URL 생성 (프록시 경로를 사용: /api + URI + 쿼리)
-    const url = 
-        API_CONFIG.uri + 
-        "?" + 
-        getParameters(API_CONFIG, timestamp, true) + 
-        "&signature=" + sign;
+    const url = API_CONFIG.uri + "?" + getParameters(API_CONFIG, timestamp, true) + "&signature=" + sign;
 
     const config = {
         method: API_CONFIG.method,
         url: `/bingx${url}`, 
-        headers: {
-            'X-BX-APIKEY': API_KEY,
-        },
+        headers: { 'X-BX-APIKEY': API_KEY },
         transformResponse: (resp) => {
-            // BigInt 이슈 처리 (15자리 이상 숫자를 문자열로 변환하여 파싱)
             const jsonWithBigIntToString = resp.replace(/:(\d{15,})(?=[,}\]])/g, (_, p1) => `:"${p1}"`);
-            try {
-                 return JSON.parse(jsonWithBigIntToString);
-            } catch (e) {
-                 console.error("JSON 파싱 오류", e);
-                 return { code: -1, msg: "JSON 파싱 오류", originalResponse: resp }; 
-            }
+            try { return JSON.parse(jsonWithBigIntToString); } 
+            catch (e) { return { code: -1, msg: "JSON 파싱 오류" }; }
         }
     };
-
     const resp = await axios(config);
     return resp.data;
 }
 
 export default function TopStats({ isLogin, walletData, user_information }) {
-
     const prevWalletRef = useRef(null);
-
     const [positionData, setPositionData] = useState([]);
     const [loadingPositions, setLoadingPositions] = useState(true);
     const [positionError, setPositionError] = useState(null);
-
     const [API_KEY, setapikey] = useState("")
     const [API_SECRET, setapisecert] =  useState("")
     const [isexchange, setIsExChange] = useState(false)
-
     const [holdingData, setHoldingData] = useState([])
     const [historyData, setHistoryData] = useState([])
-    // Upbit Current Price Data
     const currentPrice = useUpbitData(walletData && Object.keys(walletData).length ? walletData : null);
+
+    const [statsData, setStatsData] = useState({
+        m15: { rsi: 0, rsiStatus: "-", macd: 0, macdSignal: 0 },
+        h4: { rsi: 0, rsiStatus: "-", macd: 0, macdSignal: 0 }
+    });
 
     useEffect(() => {
         const updateIndicators = async () => {
@@ -110,129 +86,83 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                     const res = await axios.get(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${iv}&limit=100`);
                     return res.data.map(d => parseFloat(d[4]));
                 };
-
                 const [c15m, c4h] = await Promise.all([fetchK("15m"), fetchK("4h")]);
 
-                // 지표 계산
                 const r15 = RSI.calculate({ values: c15m, period: 14 }).pop() || 0;
                 const r4 = RSI.calculate({ values: c4h, period: 14 }).pop() || 0;
                 const m15 = MACD.calculate({ values: c15m, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).pop() || { MACD: 0, signal: 0 };
                 const m4 = MACD.calculate({ values: c4h, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).pop() || { MACD: 0, signal: 0 };
 
-                // 기존 UI 구조(short, long, total)에 값 매칭
-                setStatsData([
-                    { label: "15분 RSI", short: "RSI", long: r15.toFixed(2), total: r15 > 70 ? "과매수" : r15 < 30 ? "과매도" : "보통" },
-                    { label: "4시간 RSI", short: "RSI", long: r4.toFixed(2), total: r4 > 70 ? "과매수" : r4 < 30 ? "과매도" : "보통" },
-                    { label: "15분 MACD", short: "Sig", long: m15.signal.toFixed(2), total: m15.MACD.toFixed(2) },
-                    { label: "4시간 MACD", short: "Sig", long: m4.signal.toFixed(2), total: m4.MACD.toFixed(2) },
-                ]);
+                setStatsData({
+                    m15: {
+                        rsi: r15,
+                        rsiStatus: r15 >= 70 ? "과매수" : r15 <= 30 ? "과매도" : "보통",
+                        macd: m15.MACD,
+                        macdSignal: m15.signal
+                    },
+                    h4: {
+                        rsi: r4,
+                        rsiStatus: r4 >= 70 ? "과매수" : r4 <= 30 ? "과매도" : "보통",
+                        macd: m4.MACD,
+                        macdSignal: m4.signal
+                    }
+                });
             } catch (e) { console.error(e); }
         };
-
         updateIndicators();
         const timer = setInterval(updateIndicators, 60000);
         return () => clearInterval(timer);
     }, []);
 
-
-
-
     useEffect(() => {
         setapikey(user_information['bingx_access_key'])
         setapisecert(user_information['bingx_secret_key'])
-
         let isExChange = false;
-        if (walletData && Object.values(walletData).some(value => value > 0)) {
-            isExChange = true;
-        }
-
+        if (walletData && Object.values(walletData).some(value => value > 0)) isExChange = true;
         setIsExChange(isExChange);
     },[walletData])
 
-    // 승엽님 hook
     useEffect(() => {
         if (!isLogin) {
-             setPositionData([]);
-             setLoadingPositions(false);
-             setPositionError(null);
-             return; 
+             setPositionData([]); setLoadingPositions(false); setPositionError(null); return; 
         }
-
         const fetchAndSetPositions = () => {
-             // 데이터 로딩 로직 (이전과 동일)
-             fetchBingXPositions(API_KEY, API_SECRET)
-                .then(result => {
-                    if (result.code === 0) {
-                        const transformedData = (result.data || []).map(pos => {
-                            const unrealizedProfit = parseFloat(pos.unrealizedProfit);
-                            const realizedProfit = parseFloat(pos.realisedProfit);
-                            const coinSymbol = pos.symbol.split('-')[0];
-
-                            return {
-                                coin: coinSymbol, 
-                                type: pos.positionSide === 'LONG' ? '매수' : '매도', 
-                                entry: parseFloat(pos.avgPrice).toLocaleString(), 
-                                amount: parseFloat(pos.positionAmt).toLocaleString(undefined, { maximumFractionDigits: 4 }), 
-                                pnl: `${unrealizedProfit >= 0 ? '+' : ''}${unrealizedProfit.toFixed(4)}`, 
-                                realizedPnl: `${realizedProfit >= 0 ? '+' : ''}${realizedProfit.toFixed(4)}`, 
-                                liquidationPrice: parseFloat(pos.liquidationPrice).toFixed(1), 
-                                isWin: unrealizedProfit >= 0,
-                                isRealizedWin: realizedProfit >= 0,
-                                leverage: pos.leverage,
-                            };
-                        });
-                        setPositionData(transformedData);
-                        setPositionError(null);
-                    } else {
-                        setPositionError(`API 오류 (Code: ${result.code}): ${result.msg}`);
-                    }
-                })
-                .catch(err => {
-                    console.error("Position Fetch Error:", err);
-                    setPositionError(`데이터 로드 실패: ${err.message}`);
-                })
-                .finally(() => {
-                    setLoadingPositions(false);
-                });
+             fetchBingXPositions(API_KEY, API_SECRET).then(result => {
+                if (result.code === 0) {
+                    const transformedData = (result.data || []).map(pos => {
+                        const unrealizedProfit = parseFloat(pos.unrealizedProfit);
+                        const realizedProfit = parseFloat(pos.realisedProfit);
+                        return {
+                            coin: pos.symbol.split('-')[0], 
+                            type: pos.positionSide === 'LONG' ? '매수' : '매도', 
+                            entry: parseFloat(pos.avgPrice).toLocaleString(), 
+                            amount: parseFloat(pos.positionAmt).toLocaleString(undefined, { maximumFractionDigits: 4 }), 
+                            pnl: `${unrealizedProfit >= 0 ? '+' : ''}${unrealizedProfit.toFixed(4)}`, 
+                            realizedPnl: `${realizedProfit >= 0 ? '+' : ''}${realizedProfit.toFixed(4)}`, 
+                            liquidationPrice: parseFloat(pos.liquidationPrice).toFixed(1), 
+                            isWin: unrealizedProfit >= 0,
+                            isRealizedWin: realizedProfit >= 0,
+                            leverage: pos.leverage,
+                        };
+                    });
+                    setPositionData(transformedData); setPositionError(null);
+                } else { setPositionError(`API 오류: ${result.msg}`); }
+            }).catch(err => { setPositionError(`로드 실패: ${err.message}`); }).finally(() => { setLoadingPositions(false); });
         };
-
-        // 1. 컴포넌트 마운트 시 즉시 한 번 호출
         fetchAndSetPositions();
-
-        // 2. ★ 1초(1000ms)마다 주기적으로 호출하여 업데이트 ★
         const intervalId = setInterval(fetchAndSetPositions, 3000); 
-
-        // 3. 클린업 함수: 컴포넌트가 언마운트되거나 useEffect가 다시 실행될 때 타이머를 해제
         return () => clearInterval(intervalId);
+    }, [API_KEY, API_SECRET, isLogin]); 
 
-    }, [API_KEY, API_SECRET, isLogin]); // isLogin 상태가 변경될 때만 다시 실행
-
-    // Ref로 호출 제한
     useEffect(() => {
         if (!walletData) return;
-
-        // 중복 호출 방지
-        if (prevWalletRef.current &&
-            JSON.stringify(prevWalletRef.current) === JSON.stringify(walletData)
-        ) return;
-
+        if (prevWalletRef.current && JSON.stringify(prevWalletRef.current) === JSON.stringify(walletData)) return;
         prevWalletRef.current = walletData;
-
-        // walletData에서 직접 가져오기
-
         const th = walletData.trade_history || {};
-        // 거래 내역
         const formatLocalTime = (isoTime) => {
             if (!isoTime) return "N/A";
-            const date = new Date(isoTime); // 자동으로 현지 시간 기준
-            const year = String(date.getFullYear()).slice(2); // 뒤 두 자리만
-            const month = String(date.getMonth() + 1).padStart(2, '0'); // 1~12
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
-
-            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            const date = new Date(isoTime);
+            return `${String(date.getFullYear()).slice(2)}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
         };
         setHistoryData([
             { time: formatLocalTime(th?.['BTC']?.created_at), coin: "BTC", type: th?.['BTC']?.side, qty: th?.['BTC']?.executed_volume || 0, isBuy: true },
@@ -240,211 +170,122 @@ export default function TopStats({ isLogin, walletData, user_information }) {
             { time: formatLocalTime(th?.['XRP']?.created_at), coin: "XRP", type: th?.['XRP']?.side, qty: th?.['XRP']?.executed_volume || 0, isBuy: true },
             { time: formatLocalTime(th?.['BCH']?.created_at), coin: "BCH", type: th?.['BCH']?.side, qty: th?.['BCH']?.executed_volume || 0, isBuy: false },
         ]);
-
     }, [walletData]);
 
-    const prevPriceRef = useRef({});
     useEffect(() => {
         if (!currentPrice) return;
-
         const oc = walletData.owner_coin || {};
-
-        // currentPrice 변경 시 ownerValue 계산
         const newOwnerValue = {};
         Object.keys(oc).forEach((coin) => {
-            const amount = oc[coin] || 0;
-            const price = currentPrice[coin] || 0;
-            newOwnerValue[coin] = Math.floor(amount * price);
+            newOwnerValue[coin] = Math.floor((oc[coin] || 0) * (currentPrice[coin] || 0));
         });
-
-        prevPriceRef.current = currentPrice;
-
-        // 순서를 지정한 배열
         const coinOrder = ["BTC", "ETH", "XRP", "BCH"];
-
-        // holdingData 업데이트
-        setHoldingData(
-            coinOrder.map((coin) => ({
-                coin,
-                amount: oc[coin] || 0,
-                value: newOwnerValue[coin] || 0,
-                isWin: coin === "BTC" || coin === "ETH", // 필요에 따라 변경
-            }))
-        );
+        setHoldingData(coinOrder.map((coin) => ({
+            coin, amount: oc[coin] || 0, value: newOwnerValue[coin] || 0, isWin: coin === "BTC" || coin === "ETH",
+        })));
     }, [currentPrice, walletData]);
 
-    // 1. 청산 현황
-    const [statsData, setStatsData] = useState([
-    { label: "15분 RSI", short: "로딩중", long: "로딩중", total: "로딩중" },
-    { label: "4시간 RSI", short: "로딩중", long: "로딩중", total: "로딩중" },
-    { label: "15분 MACD", short: "로딩중", long: "로딩중", total: "로딩중" },
-    { label: "4시간 MACD", short: "로딩중", long: "로딩중", total: "로딩중" },
-]);
-
-
-
+    // --- 스타일 (Compact Version) ---
     const styles = {
-        container: {
-            width: '100%',
-            height: '100%',
+        container: { width: '100%', height: '100%', display: 'flex', gap: '15px' },
+        cardsArea: { flex: 0.6, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+        rightArea: { flex: 1.4, display: 'flex', gap: '10px', minWidth: 0 },
+        
+        indicatorCard: {
+            backgroundColor: 'var(--trade-card-bg)',
+            border: '1px solid var(--trade-border)',
+            borderRadius: '8px', 
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
             display: 'flex',
-            gap: '10px',
-        },
-        cardsArea: {
-            flex: 0.7, 
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '10px',
-        },
-        rightArea: {
-            flex: 1.3, 
-            display: 'flex',
-            gap: '10px',
+            flexDirection: 'column',
+            minHeight: '160px', // [수정] 최소 높이 줄임
+            minWidth: 0,
+            overflow: 'hidden', 
         },
         
-        // 박스 공통 스타일
-        card: {
-            backgroundColor: 'var(--trade-card-bg)',
-            border: '1px solid var(--trade-border)', 
-            borderRadius: '4px',
-            padding: '10px',
+        // [수정] 헤더 여백 축소
+        cardHeader: {
+            padding: '10px 12px', // 상하 패딩 12px -> 8px
+            borderBottom: '1px solid var(--trade-border)',
+            backgroundColor: 'var(--trade-bg)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        titleText: { fontSize: '0.85rem', fontWeight: '800', color: 'var(--trade-text)' },
+        subTitle: { fontSize: '0.75rem', color: 'var(--trade-subtext)', fontWeight: 'bold' },
+
+        // [수정] 콘텐츠 영역 여백 축소
+        cardContent: {
+            padding: '8px 10px', // 14px -> 8px
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            fontSize: '0.8rem',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)', 
+            flex: 1, 
+            gap: '4px', // 박스 간격 8px -> 4px
         },
+
+        // [수정] 지표 박스 패딩 축소
+        statBox: { 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            padding: '12px 10px', // 10px -> 6px
+            borderRadius: '6px',
+            backgroundColor: 'rgba(128, 128, 128, 0.05)',
+            border: '1px solid rgba(128, 128, 128, 0.1)',
+        },
+        
+        mainLabel: { fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--trade-subtext)' },
+        
+        valueContainer: { textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px' },
+        
+        mainValue: { fontSize: '0.95rem', fontWeight: '800', color: 'var(--trade-text)' }, // 폰트 사이즈 미세 조정
+
+        getBadgeStyle: (status) => {
+            let bgColor = '#9e9e9e'; 
+            if (status === '과매수') bgColor = '#ef5350'; 
+            if (status === '과매도') bgColor = '#26a69a'; 
+            
+            return {
+                backgroundColor: bgColor,
+                color: '#fff',
+                padding: '2px 6px', // 패딩 미세 축소
+                borderRadius: '10px',
+                fontSize: '0.7rem',
+                fontWeight: '600',
+                display: 'inline-block',
+                minWidth: '40px',
+                textAlign: 'center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+            };
+        },
+
+        // 우측 테이블 스타일 (기존 유지)
         historyBox: {
-            flex: 1,
-            backgroundColor: 'var(--trade-card-bg)',
-            border: '1px solid var(--trade-border)', 
-            borderRadius: '4px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            flex: 1, backgroundColor: 'var(--trade-card-bg)',
+            border: '1px solid var(--trade-border)', borderRadius: '6px',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
         },
-
-        // --- 텍스트 스타일 ---
-        title: {
-            fontSize: '0.9rem',
-            color: 'var(--trade-text)', 
-            marginBottom: '8px',
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px'
-        },
-        row_long: {
-            fontSize: '0.8rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '5px',
-            backgroundColor: 'var(--trade-bg)', 
-            padding: '6px 10px',
-            borderRadius: '2px',
-            alignItems: 'center',
-        },
-        row_short: {
-            fontSize: '0.8rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '5px',
-            backgroundColor: 'var(--trade-bg)', 
-            padding: '6px 10px',
-            borderRadius: '2px',
-            alignItems: 'center',
-        },
-        row_total: {
-            fontSize: '0.85rem',
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: '2px',
-            marginTop: '5px',
-            color: 'var(--trade-subtext)', 
-        },
-        shortText: { color: '#f23645', fontWeight: 'bold' }, 
-        longText: { color: '#089981', fontWeight: 'bold' },  
-        totalText: { fontSize: '1rem', fontWeight: 'bold', color: 'var(--trade-text)' }, 
-
-        // --- 테이블 헤더 ---
         sectionHeader: {
-            padding: '8px 10px',
-            fontSize: '0.8rem',
-            fontWeight: 'bold',
-            borderBottom: '1px solid var(--trade-border)',
-            backgroundColor: 'var(--trade-card-bg)',
-            color: 'var(--trade-text)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            padding: '10px 12px', fontSize: '0.85rem', fontWeight: 'bold',
+            borderBottom: '1px solid var(--trade-border)', backgroundColor: 'var(--trade-bg)',
+            color: 'var(--trade-text)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         },
-        
-        // 포지션 헤더
-        posHeader: {
-            display: 'grid',            
-            // 코인 | Side | 진입가 | 수량 | 미실현 | 실현 | 청산가
-            gridTemplateColumns: '0.7fr 0.6fr 1fr 0.8fr 1fr 1fr 1fr',  
-            padding: '6px 0', fontSize: '0.65rem', fontWeight: 'bold',
-            backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
-            color: 'var(--trade-subtext)', textAlign: 'center', 
-        },
-        // 보유코인 헤더
-        holdHeader: {
-            display: 'grid',
-            gridTemplateColumns: '0.9fr 0.9fr 1.2fr', 
-            padding: '6px 0', fontSize: '0.65rem', fontWeight: 'bold',
-            backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
-            color: 'var(--trade-subtext)', textAlign: 'center', 
-        },
-        // ★ 거래내역 헤더 (6개 컬럼으로 변경) => 5개 컬럼으로
-        histHeader: {
-            display: 'grid',
-            // 시간 | 코인 | 종류 | 수량
-            gridTemplateColumns: '2fr 1fr 1fr 1.5fr', 
-            padding: '6px 0', fontSize: '0.65rem', fontWeight: 'bold',
-            backgroundColor: 'var(--trade-bg)', borderBottom: '1px solid var(--trade-border)',
-            color: 'var(--trade-subtext)', textAlign: 'center', 
-        },
-
-        tableRow: {
-            display: 'grid',
-            padding: '4px 0',
-            fontSize: '0.7rem',
-            borderBottom: '1px solid var(--trade-border)',
-            alignItems: 'center',
-            transition: 'background-color 0.2s',
-            cursor: 'default',
-            textAlign: 'center',
-        },
-        
-        coinWrapper: {
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px', fontWeight: 'bold',
-        },
-        coinIcon: { width: '12px', height: '12px', borderRadius: '50%' },
-        
-        // 배지 스타일
-        badgeLong: {
-            backgroundColor: 'rgba(8, 153, 129, 0.15)', color: '#089981',
-            padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
-        },
-        badgeShort: {
-            backgroundColor: 'rgba(242, 54, 69, 0.15)', color: '#f23645',
-            padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
-        },
-        // ★ 구분(선물/현물) 배지 스타일
-        badgeSpot: {
-            backgroundColor: 'rgba(41, 98, 255, 0.1)', color: '#2962ff',
-            padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
-        },
-        badgeFuture: {
-            backgroundColor: 'rgba(255, 152, 0, 0.1)', color: '#ff9800',
-            padding: '1px 3px', borderRadius: '2px', fontSize: '0.65rem', fontWeight: 'bold'
-        },
-
+        posHeader: { display: 'grid', gridTemplateColumns: '0.7fr 0.6fr 1fr 0.8fr 1fr 1fr 1fr', padding: '8px 0', fontSize: '0.7rem', fontWeight: 'bold', borderBottom: '1px solid var(--trade-border)', color: 'var(--trade-subtext)', textAlign: 'center' },
+        holdHeader: { display: 'grid', gridTemplateColumns: '0.9fr 0.9fr 1.2fr', padding: '8px 0', fontSize: '0.7rem', fontWeight: 'bold', borderBottom: '1px solid var(--trade-border)', color: 'var(--trade-subtext)', textAlign: 'center' },
+        histHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.5fr', padding: '8px 0', fontSize: '0.7rem', fontWeight: 'bold', borderBottom: '1px solid var(--trade-border)', color: 'var(--trade-subtext)', textAlign: 'center' },
+        tableRow: { display: 'grid', padding: '8px 0', fontSize: '0.75rem', borderBottom: '1px solid var(--trade-border)', alignItems: 'center', textAlign: 'center' },
+        coinWrapper: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontWeight: 'bold' },
+        coinIcon: { width: '14px', height: '14px', borderRadius: '50%' },
+        badgeLong: { backgroundColor: 'rgba(8, 153, 129, 0.15)', color: '#089981', padding: '2px 4px', borderRadius: '3px', fontSize: '0.7rem', fontWeight: 'bold' },
+        badgeShort: { backgroundColor: 'rgba(242, 54, 69, 0.15)', color: '#f23645', padding: '2px 4px', borderRadius: '3px', fontSize: '0.7rem', fontWeight: 'bold' },
         pnlWin: { color: '#089981', fontWeight: 'bold' },
         pnlLose: { color: '#f23645', fontWeight: 'bold' },
     };
+
+    const getRsiColor = (val) => val >= 70 ? "#f23645" : val <= 30 ? "#089981" : "var(--trade-text)";
 
     // [1] 현물 포지션
     const renderPositionTable = () => (
@@ -470,21 +311,13 @@ export default function TopStats({ isLogin, walletData, user_information }) {
             </div>
             <div style={{overflowY:'auto', flex:1}} className="custom-scroll">
                 {loadingPositions && (
-                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>포지션 데이터를 불러오는 중...</div>
+                    <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>데이터를 불러오는 중...</div>
                 )}
-
-                {!loadingPositions && positionError && (
-                    <div style={{textAlign:'center', padding:'20px', color:'#f23645', wordBreak:'break-all'}}>
-                        API 오류: {positionError}
-                    </div>
-                )}
-
-                {!loadingPositions && !positionError && positionData.length === 0 && (
+                {!loadingPositions && positionData.length === 0 && !positionError && (
                     <div style={{textAlign:'center', padding:'20px', color:'var(--trade-subtext)'}}>
                         현재 포지션이 없습니다.
                     </div>
                 )}
-
                 {positionData.map((pos, i) => (
                     <div key={i} style={{...styles.tableRow, gridTemplateColumns: '0.7fr 0.6fr 1fr 0.8fr 1fr 1fr 1fr'}}>
                         <div style={styles.coinWrapper}>
@@ -492,11 +325,11 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                             <span>{pos.coin}</span>
                         </div>
                         <div><span style={pos.type === '매수' ? styles.badgeLong : styles.badgeShort}>{pos.type}</span></div>
-                        <span style={{color:'var(--trade-subtext)'}}>$ {pos.entry}</span>
+                        <span style={{color:'var(--trade-subtext)'}}>${pos.entry}</span>
                         <span style={{color:'var(--trade-text)'}}>{pos.amount}</span>
                         <span style={pos.isWin ? styles.pnlWin : styles.pnlLose}>{pos.pnl}</span>
                         <span style={pos.isRealizedWin ? styles.pnlWin : styles.pnlLose}>{pos.realizedPnl}</span> 
-                        <span style={{color:'var(--trade-subtext)'}}>$ {pos.liquidationPrice}</span> 
+                        <span style={{color:'var(--trade-subtext)'}}>${pos.liquidationPrice}</span> 
                     </div>
                 ))}
             </div>
@@ -516,116 +349,62 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                         <span>수량</span>
                         <span>평가금</span>
                     </div>
-
                     <div style={{ overflowY: 'auto', flex: 1 }} className="custom-scroll">
                         {holdingData.map((hold, i) => (
-                            <div
-                                key={i}
-                                style={{ ...styles.tableRow, gridTemplateColumns: '0.9fr 0.9fr 1.2fr' }}
-                            >
+                            <div key={i} style={{ ...styles.tableRow, gridTemplateColumns: '0.9fr 0.9fr 1.2fr' }}>
                                 <div style={styles.coinWrapper}>
                                     <img src={coinIcons[hold.coin]} alt="" style={styles.coinIcon} />
                                     <span>{hold.coin}</span>
                                 </div>
-
                                 <span style={{ color: 'var(--trade-text)' }}>{hold.amount}</span>
-
-                                <div
-                                    className="won"
-                                    style={{
-                                        fontWeight: 'bold',
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        justifyContent: 'space-between',
-                                        paddingRight: '30px',
-                                        paddingLeft: '30px',
-                                    }}
-                                >
-                                    <div>{Number(hold.value).toLocaleString()}</div>
-                                    <div>₩</div>
+                                <div style={{ fontWeight: 'bold', color: 'var(--trade-text)' }}>
+                                    {Number(hold.value).toLocaleString()} ₩
                                 </div>
                             </div>
                         ))}
                     </div>
                 </>
             ) : (
-                <div
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-color)',
-                        fontSize: '1em',
-                    }}
-                >
-                    Information에서 거래소를 설정해 주세요.
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--trade-subtext)' }}>
+                    거래소를 설정해 주세요.
                 </div>
             )}
         </div>
     );
 
-    // [3] 거래 내역 (★ 구분 컬럼 추가됨)
+    // [3] 거래 내역
     const renderHistoryTable = () => (
         <div style={styles.historyBox}>
             <div style={styles.sectionHeader}>
-                <span>📋 거래 내역</span>
+                <span>📋 거래 내역 (현물)</span>
             </div>           
             {isexchange ? (             
                 <>
-            <div style={styles.histHeader}>
-                <span>시간</span>
-                <span>코인</span>
-                <span>타입</span> {/* 추가됨 */}
-                <span>수량</span>
-            </div>
-         
-            <div style={{overflowY:'auto', flex:1}} className="custom-scroll">
-                {historyData.map((trade, i) => (
-                    <div key={i} style={
-                        {...styles.tableRow, 
-                        gridTemplateColumns: '2fr 1fr 1fr 1.5fr'}}>
-                        <span style={{color:'var(--trade-subtext)'}}>{trade.time}</span>
-
-                        <div style={styles.coinWrapper}>
-                            <img src={coinIcons[trade.coin]} alt="" style={styles.coinIcon} />
-                            <span>{trade.coin}</span>
-                        </div>
-
-                        {/* <span style={{color:'var(--trade-subtext)'}}>{trade.market}</span>
-                        */}
-                        {/* ★ 구분 컬럼 (현물/선물) */}
-                        {/* <div>
-                            <span style={trade.category === '선물' ? styles.badgeFuture : styles.badgeSpot}>
-                                {trade.category}
-                            </span>
-                        </div>
-                        */}
-
-                        <div>
-                            <span style={
-                                trade.type == "bid" ? 
-                                styles.badgeLong : styles.badgeShort}>{trade.type}
-                            </span>
-                        </div>
-                        
-                        <span style={{color:'var(--trade-subtext)'}}>{trade.qty}</span>
+                    <div style={styles.histHeader}>
+                        <span>시간</span>
+                        <span>코인</span>
+                        <span>타입</span>
+                        <span>수량</span>
                     </div>
-                ))}
-            </div>
-            </>
-                        ): (
-                <div
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-color)',
-                        fontSize: '1em',
-                    }}
-                >
-                    Information에서 거래소를 설정해 주세요.
+                    <div style={{overflowY:'auto', flex:1}} className="custom-scroll">
+                        {historyData.map((trade, i) => (
+                            <div key={i} style={{...styles.tableRow, gridTemplateColumns: '2fr 1fr 1fr 1.5fr'}}>
+                                <span style={{color:'var(--trade-subtext)', fontSize:'0.7rem'}}>{trade.time}</span>
+                                <div style={styles.coinWrapper}>
+                                    <img src={coinIcons[trade.coin]} alt="" style={styles.coinIcon} />
+                                    <span>{trade.coin}</span>
+                                </div>
+                                <div>
+                                    <span style={trade.type == "bid" ? styles.badgeLong : styles.badgeShort}>{trade.type}</span>
+                                </div>
+                                <span style={{color:'var(--trade-text)'}}>{trade.qty}</span>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--trade-subtext)' }}>
+                    거래소를 설정해 주세요.
                 </div>
             )}
         </div>
@@ -633,30 +412,101 @@ export default function TopStats({ isLogin, walletData, user_information }) {
 
     return (
         <div style={styles.container}>
-            {/* 좌측: 청산 현황 */}
+            {/* 좌측: 지표 카드 2개 (좌우 배치) */}
             <div style={styles.cardsArea}>
-                {statsData.map((stat, idx) => (
-                    <div key={idx} style={styles.card}>
-                        <div style={styles.title}>⚡ {stat.label}</div>
-                        <div style={styles.row_long}>
-                            <span style={{color:'var(--trade-subtext)'}}>지표값</span>
-                            <span style={styles.longText}>${stat.long}</span>
+                
+                {/* 15분 카드 */}
+                <div style={styles.indicatorCard}>
+                    {/* Header */}
+                    <div style={styles.cardHeader}>
+                        <span style={styles.titleText}>15분</span>
+                        <span style={styles.subTitle}>BTC</span>
+                    </div>
+                    
+                    <div style={styles.cardContent}>
+                        {/* RSI - 박스형 + 뱃지 */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>RSI</span>
+                            <div style={styles.valueContainer}>
+                                {/* 상태 뱃지 */}
+                                <span style={styles.getBadgeStyle(statsData.m15.rsiStatus)}>
+                                    {statsData.m15.rsiStatus}
+                                </span>
+                                <span style={{...styles.mainValue, color: getRsiColor(statsData.m15.rsi)}}>
+                                    {statsData.m15.rsi.toFixed(2)}
+                                </span>
+                            </div>
                         </div>
-                        {/* <div style={styles.row_short}>
-                            <span style={{color:'var(--trade-subtext)'}}>숏 청산</span>
-                            <span style={styles.shortText}>${stat.short}</span>
-                        </div> */}
-                        <div style={styles.row_total}>
-                            <span>현재 상태</span>
+
+                        {/* MACD */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>MACD</span>
+                            <div style={styles.valueContainer}>
+                                <span style={styles.mainValue}>
+                                    {statsData.m15.macd.toFixed(2)}
+                                </span>
+                            </div>
                         </div>
-                        <div style={{textAlign:'center'}}>
-                            <span style={styles.totalText}>{stat.total}</span>
+
+                        {/* Signal Line */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>Signal Line</span>
+                            <div style={styles.valueContainer}>
+                                <span style={styles.mainValue}>
+                                    {statsData.m15.macdSignal.toFixed(2)}
+                                </span>
+                            </div>
                         </div>
                     </div>
-                ))}
+                </div>
+
+                {/* 4시간 카드 */}
+                <div style={styles.indicatorCard}>
+                    {/* Header */}
+                    <div style={styles.cardHeader}>
+                        <span style={styles.titleText}>4시간</span>
+                        <span style={styles.subTitle}>BTC</span>
+                    </div>
+                    
+                    <div style={styles.cardContent}>
+                        {/* RSI */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>RSI</span>
+                            <div style={styles.valueContainer}>
+                                <span style={styles.getBadgeStyle(statsData.h4.rsiStatus)}>
+                                    {statsData.h4.rsiStatus}
+                                </span>
+                                <span style={{...styles.mainValue, color: getRsiColor(statsData.h4.rsi)}}>
+                                    {statsData.h4.rsi.toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* MACD */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>MACD</span>
+                            <div style={styles.valueContainer}>
+                                <span style={styles.mainValue}>
+                                    {statsData.h4.macd.toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Signal Line */}
+                        <div style={styles.statBox}>
+                            <span style={styles.mainLabel}>Signal Line</span>
+                            <div style={styles.valueContainer}>
+                                <span style={styles.mainValue}>
+                                    {statsData.h4.macdSignal.toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             
-            {/* 우측: 포지션 - 보유코인 - 거래내역 */}
+            {/* 우측 테이블 영역 */}
             <div style={styles.rightArea}>
                 {isLogin ? (
                     <>
@@ -667,9 +517,6 @@ export default function TopStats({ isLogin, walletData, user_information }) {
                 ) : (
                     <div style={{...styles.historyBox, alignItems:'center', justifyContent:'center'}}>
                         <h3 style={{margin:'0 0 5px 0', fontSize:'1rem'}}>로그인 후 사용하실 수 있습니다</h3>
-                        <p style={{margin:0, fontSize:'0.8rem', color:'var(--trade-subtext)'}}>
-                            개인정보 (ex 투자성향, 즐겨찾기, 자금 등)
-                        </p>
                     </div>
                 )}
             </div>
