@@ -156,6 +156,17 @@
   resize: none;
   border-radius: 15px;
   padding: 15px;
+
+  border: 1px solid #ccc;
+  background-color: var(--bg-color, #fff);
+  color: var(--text-color, #333);
+  font-size: 1em;
+  box-sizing: border-box;
+}
+
+.user-prompt:focus {
+  border-color: #666;
+  outline: none;
 }
 
 /* save button */

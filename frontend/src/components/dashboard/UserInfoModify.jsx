@@ -317,7 +317,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
               onClick={handlePlayToggle}
               style={{ width: "100%", marginBottom: "15px" }}
             >
-              {form.play ? "Play ON" : "Play OFF"}
+              {form.play ? "자동매매 동작 중" : "자동매매 시작"}
           </button>
         )}
 
@@ -328,7 +328,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
             onClick={() => {
             User_Infor_Modify(form);
             }}>
-            Save
+            저장
             </button>
         )}
       </div>
