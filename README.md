@@ -44,7 +44,18 @@ cd backend
 pip install -r requirements.txt
 
 #.env 파일 설정 (API Key 등)
-python main.py
+FERNET_KEY=FERNET 키 값
+GOOGLE_CLOUDE_KEY='구글 클라우드 키 값'
+GOOGLE_CLOUDE_IP="구글 클라우드 IP 값"
+GOOGLE_OAUTH_CLIENT_ID=구글 OAUTH ID
+GOOGLE_OAUTH_CLIENT_SECRET=구글 OAUTH 비밀전호
+REDIRECT_URI=http://localhost:3500/oauth/callback
+NEWS_DB_PATH="crypto_news_db"
+TERM_DB_PATH="crypto_term_db"
+OPENAI_API_KEY="OPEN API 키 값"
+VLLM_URL="VLLM URL 값"
+NEWS_DB_PATH="crypto_news_db"
+TERM_DB_PATH="crypto_term_db"
 ```
 
 **2. Frontend**
@@ -67,3 +78,5 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8300 --reload
 cd frontend
 npx vite
 ```
+
+
