@@ -52,28 +52,20 @@ def get_crypto_news(
     articles = []
 
     for r in results:
+        # 날짜 필터링이 너무 엄격하면 결과가 안 나올 수 있음
+        # 우선 메타데이터가 있는지 확인
+        title = r.metadata.get("title", "제목 없음")
+        url = r.metadata.get("url", "")
         published = r.metadata.get("published_at")
-        if not published:
-            continue
 
-        published_dt = parse_datetime_safe(published)
-        if not published_dt:
-            continue
-
-        if start_dt and published_dt < start_dt:
-            continue
-        if end_dt and published_dt >= end_dt:
-            continue
-
+        # 필터링 로직 (날짜가 없어도 일단 보여주도록 수정 권장)
         articles.append({
-            "title": r.metadata.get("title"),
-            "url": r.metadata.get("url"),
+            "title": title,
+            "url": url,
             "published_at": published,
-            "summary": r.page_content
+            "summary": r.page_content[:200] # 요약본만
         })
-
-        if len(articles) >= top_k:
-            break
+        if len(articles) >= top_k: break
 
     return {
         "query": query,

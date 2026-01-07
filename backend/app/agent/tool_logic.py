@@ -6,12 +6,17 @@ from app.agent.tools_market import MAJOR_SYMBOL_MAP
 
 # 툴 판단 + 보정 로직
 def decide_tool(llm, system_prompt, user_message, history):
+    # 전체 히스토리 대신 최신 3~5개 정도만 전달하여 
+    # 모델이 "답변 모드"에 빠지는 것을 방지합니다.
+    recent_history = history[-3:] if history else []
+    
     messages = [
         {"role": "system", "content": system_prompt},
-        *history,
+        *recent_history,
         {"role": "user", "content": user_message},
     ]
     response = llm.chat(messages=messages)
+    print(f"DEBUG LLM Response: {response}") # LLM이 실제로 뭐라고 대답하는지 확인
     msg = response.get("message", {})
 
     # 1️⃣ tool_call이 직접 온 경우
@@ -33,6 +38,25 @@ def decide_tool(llm, system_prompt, user_message, history):
 def normalize_args(tool_name, args, user_message, context):
     args = args or {}
     start, _ = resolve_date_range(user_message)
+    # 인자가 필요 없는 도구들은 바로 반환
+    if tool_name in ["get_top_movers", "get_trending_coins", "get_market_snapshot"]:
+        return args
+
+    # ======================
+    # TERM (용어 검색)
+    # ======================
+    if tool_name == "search_crypto_term":
+        args["query"] = user_message
+        return args
+
+    # ======================
+    # NEWS
+    # ======================
+    if tool_name == "get_crypto_news":
+        args["query"] = user_message
+        if start:
+            args["start_date"] = start.strftime("%Y-%m-%d")
+        return args
 
     # ======================
     # 날짜 처리
@@ -66,7 +90,14 @@ def normalize_args(tool_name, args, user_message, context):
 
         # 3.  못 찾은 경우 → 에러 상태 반환
         if not found:
-            return {"_error": "unsupported_symbol"}
+            # 'use_last_symbol'이 True이고 이전에 대화한 코인이 있다면 그것을 사용
+            if use_last and context.get("last_symbol"):
+                found = context["last_symbol"]
+            else:
+        # 심볼을 못 찾았을 때 무조건 에러가 아니라, 
+        # 도구 자체에서 "전체 시장"을 지원한다면 그대로 진행하거나, 
+        # 특정 가이드 문구를 보냅니다.
+                return {"_error": "missing_symbol"}
 
         args["symbol"] = found
         context["last_symbol"] = found
