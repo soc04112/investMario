@@ -1,7 +1,7 @@
+// src/components/dashboard/UserInfoModify.jsx
+
 import './styles/UserInfoModify.css'
 import { useState } from 'react';
-// CountrySelect는 ProfileModal로 이동했으므로 여기서 제거해도 되지만, 
-// 현물 설정 탭에서 다시 쓸 일이 없다면 import를 지우셔도 됩니다.
 // import CountrySelect from './services/countryselect' 
 import {User_Infor_Modify} from './services/user_inforamtion'
 
@@ -30,8 +30,13 @@ export default function Userinfo({ form, setForm, activeTab }) {
   // 현재 선택된 Model/Exchange에 따라 활성화 상태(ON/OFF) 결정
   const isGptActive = form.usemodel && form.usemodel.includes("GPT");
   const isGrokActive = form.usemodel && form.usemodel.includes("Grok");
+  
+  // [수정] 현물 활성화: 업비트 선택 시
   const isUpbitActive = form.exchange === "Upbit";
-  const isBingxActive = form.exchange === "BingX"; 
+  
+  // [수정] 선물 활성화: BingX 키가 모두 입력되어 있으면 ON
+  const isBingxActive = form.bingx_access_key && form.bingx_access_key.length > 0 && 
+                        form.bingx_secret_key && form.bingx_secret_key.length > 0;
 
   // 그룹별 키 정의
   const aiKeys = [
@@ -107,9 +112,13 @@ export default function Userinfo({ form, setForm, activeTab }) {
   );
 
   const validateFormForRun = () => {
-    // exchange
-    if (!form.exchange || form.exchange === "없음") {
-      alert("봇을 실행하려면 거래소를 선택해주세요.");
+    // [수정] 현물 또는 선물 중 하나라도 활성화되면 OK
+    // (Upbit가 선택되었거나, BingX 키가 존재하거나)
+    const hasSpot = form.exchange && form.exchange !== "없음";
+    const hasFuture = form.bingx_access_key && form.bingx_secret_key;
+
+    if (!hasSpot && !hasFuture) {
+      alert("봇을 실행하려면 현물 거래소(Upbit)를 선택하거나 선물 거래소(BingX) API 키를 입력해주세요.");
       return false;
     }
 
@@ -133,7 +142,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
         }
     }
 
-    // exchange key
+    // exchange key (Upbit)
     if (form.exchange === "Upbit") {
       if (!form.upbit_access_key || !form.upbit_secret_key) {
         alert("실행을 위해 Upbit Access / Secret Key를 모두 입력해주세요.");
@@ -294,6 +303,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
             <h2>API 설정</h2>
             {renderKeyGroup("AI", aiKeys)}
             {renderKeyGroup("현물", spotKeys)}
+            {/* BingX 키 입력 시 자동으로 ON 표시됨 */}
             {renderKeyGroup("선물", futureKeys)}
           </>
         )}
@@ -307,7 +317,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
               onClick={handlePlayToggle}
               style={{ width: "100%", marginBottom: "15px" }}
             >
-              {form.play ? "Play ON" : "Play OFF"}
+              {form.play ? "자동매매 동작 중" : "자동매매 시작"}
           </button>
         )}
 
@@ -318,7 +328,7 @@ export default function Userinfo({ form, setForm, activeTab }) {
             onClick={() => {
             User_Infor_Modify(form);
             }}>
-            Save
+            저장
             </button>
         )}
       </div>

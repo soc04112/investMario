@@ -9,16 +9,14 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
 
     const [showProfileModal, setShowProfileModal] = useState(false);
     
-    // [1] 레버리지 상태 (DB 대신 로컬 스토리지 사용)
+    // [1] 레버리지 상태 (로컬 스토리지)
     const [leverage, setLeverage] = useState(() => {
-        // 화면 로드 시 저장된 값이 있으면 가져오고, 없으면 10으로 초기화
         const saved = localStorage.getItem('user_leverage');
         return saved ? parseInt(saved, 10) : 10;
     });
     const [showLev, setShowLev] = useState(false); 
 
     // [2] 코인 거래 성향 상태
-    // 초기값을 "미설정"으로 변경하여 클릭 가능하도록 함
     const [tendency, setTendency] = useState("미설정");
     const [showTendency, setShowTendency] = useState(false);
 
@@ -31,7 +29,7 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
     const [confirmType, setConfirmType] = useState(null);  
     const [pendingValue, setPendingValue] = useState(null); 
 
-    // 유저 정보(등급, 자금, 성향) 가져오기 - DB 연동
+    // 유저 정보 가져오기 및 성향 상태 동기화
     useEffect(() => {
         if (verify === "verified") {
             const fetchUserData = async () => {
@@ -46,10 +44,18 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                     if (response.ok) {
                         const data = await response.json();
                         
-                        // 등급, 자금, 성향은 DB 데이터 사용
                         if (data) {
-                            // DB 값이 있으면 설정, 없으면 "미설정" 유지
-                            setTendency(data.play || "미설정");
+                            // [수정] user_prompt 내용을 분석하여 성향 버튼 상태 설정
+                            const prompt = data.user_prompt || "";
+                            if (prompt.includes("공격적으로")) {
+                                setTendency("공격형");
+                            } else if (prompt.includes("중립적으로")) {
+                                setTendency("중립형");
+                            } else if (prompt.includes("안전적으로")) {
+                                setTendency("안전형");
+                            } else {
+                                setTendency("미설정");
+                            }
                         }
                     }
                 } catch (error) {
@@ -73,7 +79,7 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
     const getTendencyColor = (t) => {
         if (t === "공격형") return "text-red";
         if (t === "안전형") return "text-green";
-        if (t === "미설정") return ""; // 미설정은 기본 색상 (흰색/회색)
+        if (t === "미설정") return ""; 
         return "text-yellow"; 
     };
 
@@ -101,8 +107,12 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
 
         const { exchange, usemodel, gpt_key, grok_key, upbit_key, bingx_key } = user_information;
 
-        if (!exchange || exchange === "없음") {
-            alert("자동매매를 시작하려면 먼저 '내 정보'에서 거래소를 선택해주세요.");
+        // 현물(Upbit) 또는 선물(BingX) 중 하나라도 설정되어 있으면 OK
+        const hasSpot = exchange && exchange !== "없음" && upbit_key;
+        const hasFuture = bingx_key; // BingX 키가 있으면 선물 가능한 것으로 간주
+
+        if (!hasSpot && !hasFuture) {
+            alert("자동매매를 시작하려면 '내 정보'에서 거래소 API 키를 설정해주세요.");
             return false;
         }
 
@@ -120,15 +130,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
             return false;
         }
 
-        if (exchange === "Upbit" && !upbit_key) {
-            alert("Upbit API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
-            return false;
-        }
-        if (exchange === "BingX" && !bingx_key) {
-            alert("BingX API Key가 설정되지 않았습니다. API 설정을 확인해주세요.");
-            return false;
-        }
-
         return true;
     };
 
@@ -141,7 +142,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
             setShowConfirm(false);
 
         } else if (confirmType === 'tendency') {
-            // [수정] "미설정"으로 되돌리는 경우가 아니라면 유효성 검사 수행
             if (pendingValue !== "미설정" && !validateSettings()) {
                 setShowConfirm(false);
                 return;
@@ -151,7 +151,7 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
             setShowTendency(false);
             setShowConfirm(false); 
             
-            // 성향에 따른 프롬프트 자동 설정
+            // [수정] 성향에 따라 user_prompt 텍스트 생성
             let newPrompt = "";
             if (pendingValue === "공격형") {
                 newPrompt = "공격적으로 투자해줘";
@@ -160,12 +160,11 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
             } else if (pendingValue === "안전형") {
                 newPrompt = "안전적으로 투자해줘";
             } else if (pendingValue === "미설정") {
-                newPrompt = ""; // 프롬프트 초기화
+                newPrompt = ""; 
             }
 
-            // DB 저장
+            // [핵심 수정] play 필드는 보내지 않고, user_prompt만 업데이트
             await updateUserInfo({ 
-                play: pendingValue === "미설정" ? "" : pendingValue, // 미설정이면 빈 값 저장
                 user_prompt: newPrompt
             });
 
@@ -270,7 +269,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
                     <button
                         className={`tendency-btn ${getTendencyColor(tendency)}`}
                         onClick={() => {
-                            // 클릭 방지 로직 제거
                             setShowTendency(!showTendency);
                             setShowLev(false);
                         }}
@@ -281,7 +279,6 @@ export default function Header({ darkMode, setDarkMode, isLogin, verify, Usernam
 
                     {showTendency && (
                         <div className="tendency-popup">
-                        {/* [수정] 옵션에 "미설정" 추가 */}
                         {["미설정", "공격형", "중립형", "안전형"].map((type) => (
                             <div
                             key={type}

@@ -3,6 +3,8 @@ from app.agent.llm import llm
 from app.agent.tool_dispatcher import dispatch_tool
 from app.agent.prompt import TOOL_SYSTEM_PROMPT, EXPLAIN_SYSTEM_PROMPT
 from app.agent.tool_logic import decide_tool, normalize_args
+from app.agent.date_utils import resolve_date_range
+
 import json
 
 
@@ -29,8 +31,19 @@ async def run_agent(user_message: str, userid: str):
 
     tool_call = decide_tool(llm, TOOL_SYSTEM_PROMPT, user_message, history)
 
-    if tool_call is None and "시세" in user_message:
-        tool_call = {"name": "get_price", "arguments": {}}
+    start, _ = resolve_date_range(user_message)
+
+    if tool_call is None:
+        if "비교" in user_message:
+            tool_call = {"name": "compare_symbols", "arguments": {}}
+
+        # 🔥 날짜가 없을 때만 get_price 허용
+        elif "시세" in user_message and start is None:
+            tool_call = {"name": "get_price", "arguments": {}}
+
+        # 🔥 날짜가 있으면 과거 조회로 강제
+        elif "시세" in user_message and start is not None:
+            tool_call = {"name": "get_price_by_date", "arguments": {}}
 
     # Tool 미사용 → 일반 답변 생성
     if not tool_call:
@@ -53,6 +66,15 @@ async def run_agent(user_message: str, userid: str):
     # Tool 실행 준비
     tool_name = tool_call["name"]
     args = normalize_args(tool_name, tool_call.get("arguments", {}), user_message, context)
+    
+    # 핵심: unsupported 처리
+    if isinstance(args, dict) and args.get("_error") == "unsupported_symbol":
+        answer = "죄송해요. 해당 코인은 아직 지원하지 않아요. 다른 코인을 입력해 주세요."
+        history += [
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": answer},
+        ]
+        return {"answer": answer, "tool_used": None}
 
     # Tool 실행
     tool_result = dispatch_tool(

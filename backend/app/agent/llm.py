@@ -4,8 +4,11 @@ import os
 import requests
 import re
 
+VLLM_URL = os.getenv(
+    "VLLM_URL",
+    "https://k7rkwrn3e1mk98-8000.proxy.runpod.net/v1/chat/completions"
+)
 
-VLLM_URL = os.getenv("VLLM_URL")
 
 TOOL_CALL_PATTERN = re.compile(
     r"<tool_call>\s*(\{.*?\})\s*</tool_call>",
