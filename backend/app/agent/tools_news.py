@@ -37,35 +37,49 @@ def get_news_db():
     return _NEWS_DB
 
 
+from langchain_community.vectorstores.utils import DistanceStrategy
+
 def get_crypto_news(
     query: str,
     top_k: int = 3,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    min_similarity: float = 0.3  # 0.3 이상의 유사도만 허용
 ):
     db = get_news_db()
-    results = db.similarity_search(query, k=top_k)
+    
+    # 1. similarity_search_with_relevance_scores 사용
+    # 이 메서드는 내부적으로 점수를 0~1 사이의 '유사도'로 정규화해서 반환합니다.
+    results_with_scores = db.similarity_search_with_relevance_scores(query, k=top_k * 2)
 
-    start_dt = datetime.fromisoformat(start_date) if start_date else None
-    end_dt = datetime.fromisoformat(end_date) if end_date else None
+    start_dt = parse_datetime_safe(start_date) if start_date else None
+    end_dt = parse_datetime_safe(end_date) if end_date else None
 
     articles = []
 
-    for r in results:
-        # 날짜 필터링이 너무 엄격하면 결과가 안 나올 수 있음
-        # 우선 메타데이터가 있는지 확인
-        title = r.metadata.get("title", "제목 없음")
-        url = r.metadata.get("url", "")
-        published = r.metadata.get("published_at")
+    for doc, similarity in results_with_scores:
+        # 2. 유사도 임계값 체크 (사용자 설정: 0.3)
+        if similarity < min_similarity:
+            continue
 
-        # 필터링 로직 (날짜가 없어도 일단 보여주도록 수정 권장)
+        published = doc.metadata.get("published_at")
+        pub_dt = parse_datetime_safe(published)
+
+        # 3. 날짜 필터링 (선택 사항)
+        if start_dt and pub_dt and pub_dt < start_dt:
+            continue
+        if end_dt and pub_dt and pub_dt > end_dt:
+            continue
+
         articles.append({
-            "title": title,
-            "url": url,
+            "title": doc.metadata.get("title", "제목 없음"),
+            "url": doc.metadata.get("url", ""),
             "published_at": published,
-            "summary": r.page_content[:200] # 요약본만
+            "summary": doc.page_content
         })
-        if len(articles) >= top_k: break
+        
+        if len(articles) >= top_k:
+            break
 
     return {
         "query": query,

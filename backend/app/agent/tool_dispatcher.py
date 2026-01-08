@@ -24,24 +24,21 @@ TOOL_REGISTRY = {
 }
 
 def dispatch_tool(tool_call: dict, userid: str):
-    """
-    tool_call = {
-      "name": "get_latest_strategy",
-      "arguments": {...}
-    }
-    """
-
     name = tool_call.get("name")
     args = tool_call.get("arguments", {})
 
     if name not in TOOL_REGISTRY:
         return {"error": f"Unknown tool: {name}"}
 
-    # 🔐 userid 강제 주입 (LLM이 주지 않아도 서버가 넣음)
-    if "userid" in TOOL_REGISTRY[name].__code__.co_varnames:
+    # 🔐 중요: TOOL_REGISTRY에 등록된 함수(예: get_user_profile)가 
+    # 인자로 'userid'를 받는지 확인하고 서버 세션의 userid를 강제 주입합니다.
+    import inspect
+    sig = inspect.signature(TOOL_REGISTRY[name])
+    if "userid" in sig.parameters:
         args["userid"] = userid
 
     try:
+        # 도구 실행 (get_user_profile(userid="U123...") 호출됨)
         result = TOOL_REGISTRY[name](**args)
         return result
     except Exception as e:

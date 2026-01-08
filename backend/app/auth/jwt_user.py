@@ -21,17 +21,9 @@ def get_current_user(request: Request):
         return payload
 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired"
-        )
-
+        raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-
+        raise HTTPException(status_code=401, detail="Invalid token")
 # def get_current_user(request: Request):
 #     return {
 #         "sub": "test-user",

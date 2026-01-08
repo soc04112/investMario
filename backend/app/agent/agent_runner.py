@@ -32,6 +32,13 @@ async def run_agent(user_message: str, userid: str):
     tool_call = decide_tool(llm, TOOL_SYSTEM_PROMPT, user_message, history)
 
     start, _ = resolve_date_range(user_message)
+    # # 🔥 TERM 강제
+    # TERM_KEYWORDS = ["용어", "뜻", "뭐야", "의미", "개념", "설명"]
+    # if tool_call is None and any(k in user_message for k in TERM_KEYWORDS):
+    #     tool_call = {
+    #         "name": "search_crypto_term",
+    #         "arguments": {}
+    #     }
 
     if tool_call is None:
         if "비교" in user_message:

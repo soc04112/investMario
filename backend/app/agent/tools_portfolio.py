@@ -1,38 +1,41 @@
 from app.api.config.config import SessionLocal, UserInformation, TradingHistory
+from app.services.upbit_api import exchange_information
 from datetime import datetime, timedelta
 
 def get_user_profile(userid: str):
+    """
+    사용자의 기본 프로필 및 설정 정보를 가져옵니다. (최신 JSON 구조 반영)
+    """
     db = SessionLocal()
     try:
-        row = (
-            db.query(UserInformation)
-            .filter(UserInformation.userid == userid)
-            .order_by(UserInformation.id.desc())
-            .first()
-        )
-
+        row = db.query(UserInformation).filter(UserInformation.userid == userid).first()
         if not row:
             return {"error": "User not found"}
 
-        result = row.__dict__.copy()
-        result.pop("_sa_instance_state", None)
-
-        # API 키는 절대 LLM에 노출 금지
-        if "key" in result:
-            result["key"] = "ENCRYPTED"
-
-        return result
-
+        # 수정된 DB 구조: userinfo, usercustom 딕셔너리에서 데이터 추출
+        user_data = {
+            "userid": row.userid,
+            "username": row.userinfo.get('username') if row.userinfo else None,
+            "usemodel": row.userinfo.get('usemodel') if row.userinfo else None,
+            "exchange": row.usercustom.get('exchange') if row.usercustom else None,
+            "ticker": row.usercustom.get('ticker') if row.usercustom else [],
+            "api_key_status": "ENCRYPTED" # LLM 보안을 위해 문자열 처리
+        }
+        return user_data
     finally:
         db.close()
 
-def get_latest_strategy(userid: str,limit: int = 5):
+def get_latest_strategy(userid: str, limit: int = 5):
+    """
+    사용자의 최근 거래 전략 히스토리를 가져옵니다.
+    """
     db = SessionLocal()
     try:
+        # TradingHistory 구조에 맞춰 최신순 정렬 및 데이터 추출
         rows = (
             db.query(TradingHistory)
             .filter(TradingHistory.userid == userid)
-            .order_by(TradingHistory.id.desc())
+            .order_by(TradingHistory.time.desc())
             .limit(limit)
             .all()
         )
@@ -42,60 +45,43 @@ def get_latest_strategy(userid: str,limit: int = 5):
 
         results = []
         for r in rows:
-            item = r.__dict__.copy()
-            item.pop("_sa_instance_state", None)
-            results.append(item)
-
+            results.append({
+                "time": r.time.isoformat(),
+                "position": r.position,
+                "why": r.why
+            })
         return results
-
     finally:
         db.close()
 
-
-from datetime import timedelta
-
 def get_strategy_by_date(userid: str, start_date=None, end_date=None):
+    """
+    특정 날짜 범위의 거래 전략 기록을 가져옵니다.
+    """
     db = SessionLocal()
     try:
-        query = db.query(TradingHistory).filter(TradingHistory.userid == userid)
-
-        # 날짜 지정이 안되면 오류 처리
-        if not start_date:
-            return {"error": "start_date is required for date-based queries"}
-
-        # 하루 조회: end_date 자동 생성
-        if start_date and not end_date:
-            end_date = start_date + timedelta(days=1)
-
-        # 문자열이면 datetime으로 변환 (ISO8601 가정)
+        # 입력값이 문자열일 경우 datetime 객체로 변환
         if isinstance(start_date, str):
-            start_date = datetime.fromisoformat(start_date)
+            start_date = datetime.fromisoformat(start_date.replace('Z', ''))
+        if isinstance(end_date, str):
+            end_date = datetime.fromisoformat(end_date.replace('Z', ''))
 
-        if end_date is None:
+        if not start_date:
+            return {"error": "start_date is required"}
+        
+        if not end_date:
             end_date = start_date + timedelta(days=1)
-        elif isinstance(end_date, str):
-            end_date = datetime.fromisoformat(end_date)
 
-        # 날짜 범위 필터 적용
-        query = query.filter(
+        query = db.query(TradingHistory).filter(
+            TradingHistory.userid == userid,
             TradingHistory.time >= start_date,
             TradingHistory.time < end_date
         ).order_by(TradingHistory.time.asc())
 
         rows = query.all()
-
         if not rows:
-            return {"error": "No strategy history found in selected date range"}
+            return {"error": "No data found for the given range"}
 
-        results = []
-        for r in rows:
-            item = r.__dict__.copy()
-            item.pop("_sa_instance_state", None)
-            results.append(item)
-
-        return results
-
+        return [{"time": r.time.isoformat(), "position": r.position, "why": r.why} for r in rows]
     finally:
         db.close()
-
-
